@@ -5,7 +5,7 @@ argument-hint: "<feature description> [--ticket <ID>] [--headless]"
 model: opus
 ---
 
-# Describe Feature
+# Product Analysis
 
 You are producing a **product description** of a new feature or a change to an existing one: what it should do for the user, why the business wants it, and what is true about the system today. This document is the input a technical spec is later written from — it is not the spec.
 
