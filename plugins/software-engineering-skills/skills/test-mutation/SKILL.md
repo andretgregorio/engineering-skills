@@ -1,5 +1,5 @@
 ---
-name: mutation-testing
+name: test-mutation
 description: Mutation testing patterns for verifying test effectiveness. Use when analyzing branch code to find weak or missing tests.
 ---
 

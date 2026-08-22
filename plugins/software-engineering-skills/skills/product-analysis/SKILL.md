@@ -1,5 +1,5 @@
 ---
-name: describe-feature
+name: product-analysis
 description: Produce a product/business description of a feature before any technical spec exists — business goals with measured baselines, how the system behaves today, narrative use-case scenarios, scope boundaries, and technical constraints — resolving ambiguities with the human as it goes. Writes feature-description.md and stops for approval; it never plans or implements. Use when a customer-facing behavior has been requested but the product intent, success metrics, or scope still need clarification, or when the user says "describe this feature", "what are we actually building", or invokes /describe-feature.
 argument-hint: "<feature description> [--ticket <ID>] [--headless]"
 model: opus
