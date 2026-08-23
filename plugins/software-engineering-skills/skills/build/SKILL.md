@@ -92,9 +92,31 @@ Determine it from evidence, in this order: the repo's own rules (`CLAUDE.md`, co
 
 Two rules hold regardless of strategy: never rewrite history on a branch that is not yours, and never force-push a branch that already carries someone else's commits or a submitted review — ask first.
 
-**Open each PR as soon as its branch is finished.** The moment a PR's last task is committed, verified, and reviewed (see step 7), push the branch and open the PR — *do not wait for the rest of the stack*. The subagent is already working on the next branch in that worktree; opening PR *n* while PR *n+1* is being written is the point of this design, and it is what gets reviewers started early. Each PR body carries: the plan path, its position in the stack (`2 of 3`, base branch, links to the others once they exist), the task checklist it contains, what a reviewer gets, what a tester can verify, and the verification evidence. Link the earlier PRs from the later ones and edit the earlier bodies to link forward as the stack grows.
+**Open each PR as soon as its branch is finished.** The moment a PR's last task is committed, verified, and reviewed, push the branch and open the PR — *do not wait for the rest of the stack*. This overlaps with the next branch being written: see *Concurrency* below for the exact handoff, which is what makes it safe. Each PR body carries: the plan path, its position in the stack (`2 of 3`, base branch, links to the others once they exist), the task checklist it contains, what a reviewer gets, what a tester can verify, and the verification evidence. Link the earlier PRs from the later ones and edit the earlier bodies to link forward as the stack grows.
 
 **PRs are what the plan asked for.** If the plan defines no stack and no PR, ask before opening one.
+
+## Concurrency: what actually overlaps
+
+Opening PR *n* while PR *n+1* is being written is real overlap, but it depends on two mechanics being understood exactly — one is a capability, the other is a constraint.
+
+**A subagent cannot report progress mid-flight.** Its report *is* the end of its turn: it works, it returns, you are notified. There is no partial report from a running agent, and no way to ask one for a status while it works. So do not design around "the implementer tells me branch 1 is done and keeps going" — instead, **let the turn boundary be the branch boundary**: the last task of PR *n* ends a turn, and the implementer is idle at exactly the moment you need it to be. You already know the branch is complete, because the plan's stack table says which task is its last. Continue the same agent with `SendMessage` for the next task; its context survives.
+
+**You can push a branch that is not checked out, from a worktree that is dirty and busy.** A push resolves refs and sends objects; it never reads the index or the working tree. So while the implementer is mid-task on branch *n+1* — uncommitted edits and all — `git -C <worktree> push -u origin <branch-n>` succeeds, the remote lands on the right SHA, and the agent's next commit is unaffected. (Verified, not assumed: a linked worktree on branch `pr2` with a dirty tree pushed `pr1` cleanly, and committing on `pr2` immediately afterwards worked.)
+
+That gives this handoff at every branch boundary. Steps 1–4 happen while the implementer is idle; step 6 is the overlap:
+
+1. The last task of PR *n* is committed, verified, and ticked. The implementer is idle.
+2. **Review the branch** (step 6). Read the diff without the working tree — `git diff <base>...<branch>` — or spin a throwaway `git worktree add --detach <tmp> <branch>` for reviewers that want files. Never review by checking the branch out in the build worktree.
+3. **Fold review blockers in**, by messaging the same idle implementer while it is still on branch *n*. This must happen **before** the next branch is created: fixing branch *n* after branch *n+1* has branched off it forces a restack you did not need.
+4. **Create branch *n+1*** off branch *n*'s head, in the same worktree. This is the one step that requires a checkout, and it is safe precisely because the implementer is between turns.
+5. **Dispatch the first task of branch *n+1*** in the background.
+6. **While it runs**, push branch *n* and open PR *n*, then update the neighbouring PR bodies to link the new one. Read-only git and the PR API only — never a checkout, a stash, a rebase, or anything touching the index, while a task is in flight.
+7. Wait for the implementer's task report, then continue the loop.
+
+Two safety rules fall out of this and are not negotiable: **never run a working-tree or index command in a worktree whose implementer has a live turn**, and **never restack a branch while an agent is committing on it** — hold it to the next turn boundary.
+
+Across repositories none of this applies: those implementers are independent, in their own worktrees, and genuinely parallel.
 
 ## When reality contradicts the documents (hard stop)
 
@@ -185,10 +207,10 @@ Stop and report `blocked` if anything above does not match the code.
 
 For each PR in the stack, in order; for each task in that PR, in order:
 
-1. **Create the branch** if this is the PR's first task — off the previous PR's head, in the same worktree (`--no-stack`: one branch for the repo, created once).
-2. **Send the task brief.** The subagent writes the failing test, observes it red, implements, refactors, and makes **one commit**.
+1. **Create the branch** if this is the PR's first task — off the previous PR's head, in the same worktree, always between the implementer's turns (`--no-stack`: one branch for the repo, created once). For every PR after the first, step 6 has already done this.
+2. **Send the task brief.** The subagent writes the failing test, observes it red, implements, refactors, and makes **one commit**. Its report ends its turn; there is no progress to ask for in between.
 3. **Read its report** — commit SHA, files changed, the red output and the green output, verification results, notes. `blocked` → halt to the human (see above).
-4. **Verify it yourself.** Re-run the task's verification and the repo's suite against that commit. Check the diff against the task's Files table: nothing extra, nothing missing, no disabled tests, one commit. A mismatch is a halt.
+4. **Verify it yourself**, now that the implementer is idle. Re-run the task's verification and the repo's suite against that commit. Check the diff against the task's Files table: nothing extra, nothing missing, no disabled tests, one commit. A mismatch is a halt.
 5. **Tick the plan** — the task's box, its acceptance-criteria boxes, and a Build Log row with the commit SHA. Save the file now; this is the memory.
 6. **`--no-auto`:** present the task report and wait for the human. Auto: print the three-line report and continue.
 
@@ -200,15 +222,16 @@ Compact task report:
   Verified: <command → expected result observed>
 ```
 
-### 6. Finish a branch: review, push, open the PR
+### 6. Finish a branch: review, fold in, branch off, push, open the PR
 
-When a PR's last task is verified and ticked:
+When a PR's last task is verified and ticked, run the handoff in *Concurrency* — the order is what keeps the overlap safe:
 
-- **Review the branch diff before it leaves the machine.** Dispatch the plugin's read-only reviewers in parallel on the accumulated diff — `clean-coder-reviewer` and `test-design-reviewer`, plus `code-smell-detector` when the branch is large or touches legacy code. Take their **blockers** only; note the rest in the PR body as follow-ups rather than widening the branch.
-- **Fold the fixes in.** The branch is not pushed yet, so a fix belongs in the commit of the task it corrects (`git commit --fixup` + autosquash, or amend). One task, one commit, still.
+- **Review the branch diff before it leaves the machine**, while the implementer is idle. Dispatch the plugin's read-only reviewers in parallel — `clean-coder-reviewer` and `test-design-reviewer`, plus `code-smell-detector` when the branch is large or touches legacy code — pointed at `git diff <base>...<branch>` or a throwaway `--detach` worktree, never at the build worktree's checkout. Take their **blockers** only; note the rest in the PR body as follow-ups rather than widening the branch.
+- **Fold the fixes in now**, through the same implementer, still on this branch. Nothing is pushed yet, so a fix belongs in the commit of the task it corrects (`git commit --fixup` + autosquash, or amend). One task, one commit, still. Doing this after the next branch exists costs a restack.
 - **Re-verify** the branch: suite green at the head, every task's verification re-run.
-- **Push** (`git push -u origin <branch>`; retry network failures with backoff) and **open the PR immediately**, with base = the previous PR's branch (or the plan's base for PR 1), while the subagent starts the next branch.
-- **Then create the next branch off this head in the same worktree** and continue the loop.
+- **Create the next branch** off this head in the same worktree, and **dispatch its first task** in the background.
+- **Then push and open the PR** — `git push -u origin <branch>` (retry network failures with backoff), base = the previous PR's branch (or the plan's base for PR 1) — while that task is being written. The push does not need the branch checked out and does not disturb the implementer.
+- Wait for the task report and continue the loop.
 
 ### 7. Restack when an earlier PR changes
 

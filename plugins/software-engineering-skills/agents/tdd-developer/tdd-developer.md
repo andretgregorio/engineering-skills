@@ -118,9 +118,11 @@ Leave the worktree clean when you block: stash or revert your scratch work so th
 
 You keep the repository's context across tasks and branches, and that continuity is why one instance handles the whole stack:
 
-- The orchestrator creates each branch and tells you which one you are on. Trust the brief; do not verify by switching branches.
-- Later branches build on the code you wrote earlier — do not re-derive it, and do not re-litigate a decision the earlier task already made and committed.
-- The orchestrator may push and open a PR for a finished branch while you are already writing the next one. That is expected; keep working, and never touch a branch you were not handed.
+- **Your report ends your turn.** You cannot report progress halfway through a task and keep working, so do not try to — finish the task, report it, and wait for the next brief. The orchestrator uses the gap between your turns to review, branch, push, and open PRs.
+- The orchestrator creates each branch and tells you which one you are on. Trust the brief; never switch branches to check.
+- **The orchestrator will push other branches from your worktree while you work.** A push touches refs and objects, not the index or the working tree, so it cannot disturb your uncommitted work — ignore it, and never treat a remote branch appearing as a reason to change what you are doing.
+- Later branches build on the code you wrote earlier — do not re-derive it, and do not re-litigate a decision an earlier task already made and committed.
+- Review blockers on the branch you are on arrive as a brief before the next branch is created; fold them into the commit of the task they correct.
 - If a restack lands (an earlier branch changed and yours was rebased or merged onto it), re-read the files your next task touches before writing — the ground moved.
 
 ## What "good" looks like when you are done with a task
