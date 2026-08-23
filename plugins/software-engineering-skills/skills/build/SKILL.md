@@ -1,6 +1,6 @@
 ---
 name: build
-description: Executes an approved implementation plan — sets up one worktree per repository, dispatches a tdd-developer subagent per repo to build one PR branch at a time, runs a yellow-phase review gate (clean code, code smells, test design, mutation testing) after every green, turns every plan task into exactly one verified commit, has an independent judge check the branch against the plan before anything is ticked, and opens each stacked PR the moment its branch is finished. Part of the Spec Driven Development workflow — it runs right after /plan and is the first phase that writes production code. It stops and asks the human whenever reality contradicts the spec or the plan. Use when a plan is approved and the work should be built, or when the user says "build this", "implement the plan", "execute the plan", or invokes /build.
+description: Executes an approved implementation plan — sets up one worktree per repository, dispatches a tdd-developer subagent per repo to build one PR branch at a time, runs a yellow-phase review gate (clean code, code smells, test design, mutation testing) after every green, turns every plan task into exactly one verified commit, has an independent judge check the branch against the plan before anything is ticked, opens each stacked PR the moment its branch is finished — through the repository's own PR skill when it has one — and puts a monitor on each PR to drive it to ready-for-human-review. Part of the Spec Driven Development workflow — it runs right after /plan and is the first phase that writes production code. It stops and asks the human whenever reality contradicts the spec or the plan. Use when a plan is approved and the work should be built, or when the user says "build this", "implement the plan", "execute the plan", or invokes /build.
 role: orchestrator
 user-invocable: true
 argument-hint: "[--plan-file <plan_file>] [--ticket <ID>] [--no-auto] [--no-stack] [--headless]"
@@ -21,7 +21,7 @@ Its readers — of the branches you produce and the plan you leave behind — ar
 
 - **Scope the plan does not contain.** A task that serves something the plan does not ask for is out. If it turns out to be needed, that is a halt (see below), not a bonus commit.
 - **A revised plan or spec.** You amend the plan only to record state and drift — checked boxes, commit SHAs, and what actually happened. Changing *what gets built* is a `/plan` conversation; changing *what the feature is* is a `/specs` conversation.
-- **Merges, approvals, releases, or flag enablement.** You open PRs and stop there. Merging in stack order, approving, deploying, and turning the flag on are human acts, described in the plan's rollout section.
+- **Merges, approvals, releases, or flag enablement.** You open PRs, drive them to green, and stop there — a monitor's `ready` is a handoff to a person, never a green light to merge. Merging in stack order, approving, deploying, and turning the flag on are human acts, described in the plan's rollout section.
 - **Green by subtraction.** Never skip, disable, quarantine, `xfail`, or delete a test to make a branch pass. That is a halt.
 
 ## Rules
@@ -29,6 +29,8 @@ Its readers — of the branches you produce and the plan you leave behind — ar
 - **One task, one commit**, made after that task's yellow gate. The commit message names the task ID. A task that cannot be finished in one commit is drift — stop and ask.
 - **One implementer per PR branch.** Its assignment is the whole branch — every task the stack table puts in that PR — and its deliverable is a branch that is ready to open a PR from.
 - **Nothing is ticked on the implementer's word.** A branch report goes to `plan-conformance-judge` first.
+- **The repo's own PR skill beats this plugin's.** Only fall back to `/open-pr` when the repository has none.
+- **Every PR you open gets a monitor**, in its own worktree, before you move on.
 - **The plan is live state.** Tick a task's box only when its acceptance criteria are checked and their verification has actually been run — not when the code is written. Record the commit SHA next to it.
 - **When reality contradicts a document, stop and ask.** Always. A missing file, a criterion that cannot be verified as written, a test that is green when the plan says it should be red, an approach the code will not allow — none of these are yours to route around. See *When reality contradicts the documents*.
 - **Verification is run, not claimed.** You re-run the task's verification yourself against the subagent's commit. A subagent's report is evidence to check, not a result to accept.
@@ -51,6 +53,8 @@ Its readers — of the branches you produce and the plan you leave behind — ar
 | Runs the yellow-gate reviews | Yes — fans out four reviewers at each green | Never — it pauses and receives the findings |
 | Runs the branch's CI-parity checks | Re-runs them to confirm | Yes, before declaring the branch ready |
 | Judges conformance to the plan | Yes — via `plan-conformance-judge` | Never — it reports what it did, not whether it was right |
+| Opens the PR | Yes — the repo's own PR skill, else `/open-pr` | Never |
+| Drives the PR to green afterwards | Spawns a `pr-monitor` per PR | Never |
 | Ticks the plan's checkboxes | Yes | Never |
 | Talks to the human | Yes — every halt and every checkpoint | Never — reports `blocked` upward instead |
 
@@ -116,6 +120,22 @@ It gets the PR's tasks from the plan, the spec acceptance criteria they trace to
 - **Conforms** across every task is what lets you tick the boxes.
 
 The judge never edits, never advises on style (that is the yellow gate's job), and never sees this conversation — its value is that it reads the plan and the diff cold.
+
+## Opening a PR, and what happens next
+
+**The repository's own open-PR skill always wins.** Before opening anything, look in the repo for a skill that creates pull requests — `.claude/skills/` with a name or description about opening/creating PRs, or a convention named in `CLAUDE.md` or the contributing docs. Found one? Invoke it. Nothing there? Invoke this plugin's **`/open-pr`**, which fills the repository's pull request template when it has one and its own built-in template when it does not. Decide this per repo in preflight and record which path you took — do not re-derive it at every branch.
+
+Either way you supply the same evidence, because a PR body is only worth reading if it is true: the tasks that landed with their commits, the yellow-gate summary, the CI-parity results including what was skipped and why, the judge's verdict, how a reviewer or tester verifies it, and the branch's place in the stack.
+
+**Then spawn a `pr-monitor` on it — one per PR, in the background.** Its single goal is to make the PR *ready for human review*, defined as: every CI check green, every automated review finding applied or answered, and every changes-requested review addressed or justified. It runs under the `/goal` skill with that as its success condition. Which means a finished branch is being driven to green while the implementer is still writing the next one — the same overlap that makes eager PRs worth opening.
+
+Three things about monitors matter to you as orchestrator:
+
+- **They get their own worktree.** A monitor must never work in the build worktree — the implementer is in there. `git worktree add --detach` or a separate clone, and it cleans up after itself.
+- **Every monitor push is a stack event.** A fix pushed to PR *n*'s branch moves the base of PR *n+1*. The monitor reports the push and does **not** restack; restacking the children is yours (step 8), at the next turn boundary.
+- **They report at three moments only** — `ready`, `blocked`, and each push that affects the stack. `blocked` means a human decision: surface it like any other halt. Silence means it is working.
+
+A monitor never merges and never approves. `ready` is a handoff to a person, not a green light.
 
 ## Modes
 
@@ -247,7 +267,9 @@ Every item is checked and reported before the first subagent is dispatched. A fa
 
 - [ ] The plan is approved, and its tasks, stack table, and PR assignment are internally consistent (every task in exactly one PR).
 - [ ] Every repository the plan touches is accessible and its base branch exists and is fetched.
-- [ ] The `tdd-developer` and `plan-conformance-judge` agents are available, and so are the yellow gate's three reviewers and the `/test-mutation` skill. (If one is not, stop — do not substitute silently, and do not drop a gate.)
+- [ ] The `tdd-developer`, `plan-conformance-judge`, and `pr-monitor` agents are available, and so are the yellow gate's three reviewers and the `/test-mutation` skill. (If one is not, stop — do not substitute silently, and do not drop a gate.)
+- [ ] **The open-PR path is decided per repo**: the repository's own PR skill if it has one, otherwise `/open-pr`. Record which, and which PR template it will use.
+- [ ] The `/goal` skill is available for the monitors, or it is not — either way, say which, because it changes how a monitor runs its loop.
 - [ ] The workspace convention is determined (harness, or the default layout).
 - [ ] The force-push policy is determined per repo, with evidence.
 - [ ] Each repo's bootstrap/install runs clean, and **the baseline suite is green on the base branch** — the exact command recorded. A red baseline is a halt.
@@ -326,12 +348,18 @@ Run the handoff in *Concurrency* — the order is what keeps the overlap safe:
 - **Run a cross-task pass only when it earns its keep.** The yellow gates already reviewed every task's diff; a branch-level reviewer sweep is for coherence the per-task view cannot see — duplication introduced across tasks, leftover scaffolding, an abstraction three tasks grew into. Worth it on branches of three or more tasks, or when the gates deferred notes that interact. Read the diff without the working tree.
 - **Re-verify** the branch: suite green at the head, CI-parity checks green.
 - **Create the next branch** off this head in the same worktree, and **dispatch its first PR brief** in the background.
-- **Then push and open the PR** — `git push -u origin <branch>` (retry network failures with backoff), base = the previous PR's branch (or the plan's base for PR 1) — while that branch is being written. The push does not need the branch checked out and does not disturb the implementer. The PR body carries the yellow-gate summary, the CI-parity results including what was skipped, and the judge's verdict.
+- **Then push and open the PR** — `git push -u origin <branch>` (retry network failures with backoff), base = the previous PR's branch (or the plan's base for PR 1) — while that branch is being written. The push does not need the branch checked out and does not disturb the implementer. Open it through the repo's own PR skill if it has one, otherwise `/open-pr`, handing over the evidence listed in *Opening a PR*.
+- **Spawn a `pr-monitor` on the new PR**, in the background, with its own worktree. It drives that PR to ready-for-review while you carry on with the stack.
 - Wait for the next branch report and continue the loop.
 
 ### 8. Restack when an earlier PR changes
 
-Review feedback on PR *n* lands as commits on PR *n*'s branch, so everything above it must be updated — using the strategy fixed in preflight (rebase preferred, merge when force push is blocked). After a restack: re-run each affected branch's suite, push, and say in the final report which branches moved and why. Reviews land bottom-up; never restack silently.
+Commits land on PR *n*'s branch from two places — a human reviewer's feedback, and its `pr-monitor` fixing CI or a bot finding — and either way everything above it must be updated, using the strategy fixed in preflight (rebase preferred, merge when force push is blocked).
+
+- A monitor's push report is your trigger: restack the children, do not ask the monitor to do it.
+- Restack **at a turn boundary**, never while an implementer is committing on the branch you are moving.
+- After a restack: re-run each affected branch's suite and CI-parity checks, push, and tell each affected monitor that its PR's head moved.
+- Say in the final report which branches moved and why. Reviews land bottom-up; never restack silently.
 
 ### 9. Exit gate (hard stop)
 
@@ -350,6 +378,7 @@ Do not report the build finished until every item passes. Hand the plan, the bra
 - [ ] One commit per task, in plan order, each naming its task ID; no stray commits and no unexplained files.
 - [ ] Every branch's suite is green at its head; the base branch is unchanged by this build.
 - [ ] The stack's bases form the chain the plan describes, every PR is open and linked to its neighbors and to the plan, and each PR body states what a reviewer gets and what a tester can verify.
+- [ ] Every PR has a `pr-monitor` on it, and each one's state is known: `ready`, still working, or `blocked` with the decision it needs.
 - [ ] Nothing was merged, approved, deployed, or enabled.
 
 **Record**
@@ -363,6 +392,8 @@ Fix blockers and re-run only the failing items (max 2 iterations; then surface t
 ### 10. Report and stop
 
 Print the final report (template below), name what the human must do next — review the stack bottom-up, merge in order, then the plan's rollout steps — and stop. Do not merge, do not enable the flag, do not start the next feature.
+
+**The exit gate does not wait for the monitors.** A PR that is still being driven to green is a normal end state: report each monitor's status, say which PRs are ready for a human now and which are still working, and note that a monitor's later push will need a restack above it. If the session ends while monitors are running, say so plainly rather than implying the stack is settled.
 
 ## Plan bookkeeping
 
@@ -383,6 +414,11 @@ The plan is the implementation's memory; keep it accurate in real time.
 | Branch | Checks run | Skipped (why) | Result |
 |---|---|---|---|
 
+### Pull requests
+| PR | Link | Opened by | Monitor | Pushes since opening | Restacked above |
+|---|---|---|---|---|---|
+<!-- Opened by: <repo's PR skill> | /open-pr. Monitor: ready | working | blocked. -->
+
 ### Drift
 | Task | Document said | What was true | Decision | Decided by |
 |---|---|---|---|---|
@@ -399,6 +435,7 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 - **Drift halts the run.** Never assume, never adapt, never pick the "obvious" fix. Write what was found and what it blocks, leave the work committed up to the last verified task, and stop.
 - **Never wait for an answer and never fake one.** There is nobody to ask, so the options above collapse to: continue only where nothing is contradicted, otherwise halt.
 - **PRs open as drafts**, and the final report says a human has not accepted any task.
+- **Monitors still run**, but a `blocked` monitor has nobody to ask: it records the blocker and stops, and the final report carries it.
 - `--no-auto` with `--headless` is contradictory — halt.
 - Preflight, verification, the pre-PR review, and the exit gate all still run, and their verdicts are still recorded.
 
@@ -409,8 +446,9 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 
 **Plan**: <path>   **Spec**: <path>   **Mode**: auto | --no-auto · stacked | --no-stack
 
-| Repo | Worktree | Branch | Tasks | Commits | Yellow gates | CI-parity checks | Judge | PR |
-|---|---|---|---|---|---|---|---|---|
+| Repo | Worktree | Branch | Tasks | Commits | Yellow gates | CI-parity checks | Judge | PR | Monitor |
+|---|---|---|---|---|---|---|---|---|---|
+<!-- Monitor: ready | working | blocked (<what it needs>) -->
 
 **Built**: <n>/<m> tasks. **Not built**: <task IDs and why>.
 
