@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Turns an approved spec into an implementation plan — an ordered checkbox todo list where every task is classified as an Engineer or a Product task and carries 1–3 verifiable acceptance criteria, the exact files it changes, its automated tests, and its test plan — plus a proposed stack of independently reviewable PRs. Part of the Spec Driven Development workflow: it runs right after /specs, passes a spec-conformance quality gate, and stops before any code is written. Use when a spec is approved and the work needs breaking down, or when the user says "plan this", "break this down", or invokes /plan.
+description: Turns an approved spec into an implementation plan — an ordered checkbox todo list where every task is classified as an Engineer or a Product task and carries 1–3 verifiable acceptance criteria, the exact files it changes, its automated tests, and its test plan — plus a proposed stack of independently reviewable PRs. Part of the Spec Driven Development workflow — it runs right after /specs, passes a spec-conformance quality gate, and stops before any code is written. Use when a spec is approved and the work needs breaking down, or when the user says "plan this", "break this down", or invokes /plan.
 role: orchestrator
 user-invocable: true
 argument-hint: "[--spec-file <spec_file>] [--ticket <ID>] [--headless]"
@@ -187,7 +187,7 @@ Fix blockers and re-run only the failing items (max 2 iterations; then surface t
 
 Write to the location configured for plans at the user or project scope. If none is configured, write **alongside the spec** — `plan.md` in the same `<TICKET>_<slug>/` directory — so the description, the spec, and the plan sit together. Create the directory if missing. If the file exists, ask before overwriting (headless: halt).
 
-Print the path, show the human the task list, the PR stack, and the open questions, and ask them to approve or request changes. **Only on explicit approval** set `**Status**: approved`. Then stop: name the implementation step as what comes next, and do not start it.
+Print the path, show the human the task list, the PR stack, and the open questions, and ask them to approve or request changes. **Only on explicit approval** set `**Status**: approved`. Then stop: name `/build` — the implementation phase — as what comes next, and do not start it.
 
 ## Document template
 
