@@ -1,6 +1,6 @@
 ---
 name: build
-description: Executes an approved implementation plan — sets up one worktree per repository, dispatches a tdd-developer subagent per repo, turns every plan task into exactly one verified commit, keeps the plan's checkboxes as live state, and opens each stacked PR the moment its branch is finished. Part of the Spec Driven Development workflow — it runs right after /plan and is the first phase that writes production code. It stops and asks the human whenever reality contradicts the spec or the plan. Use when a plan is approved and the work should be built, or when the user says "build this", "implement the plan", "execute the plan", or invokes /build.
+description: Executes an approved implementation plan — sets up one worktree per repository, dispatches a tdd-developer subagent per repo to build one PR branch at a time, runs a yellow-phase review gate (clean code, code smells, test design, mutation testing) after every green, turns every plan task into exactly one verified commit, has an independent judge check the branch against the plan before anything is ticked, and opens each stacked PR the moment its branch is finished. Part of the Spec Driven Development workflow — it runs right after /plan and is the first phase that writes production code. It stops and asks the human whenever reality contradicts the spec or the plan. Use when a plan is approved and the work should be built, or when the user says "build this", "implement the plan", "execute the plan", or invokes /build.
 role: orchestrator
 user-invocable: true
 argument-hint: "[--plan-file <plan_file>] [--ticket <ID>] [--no-auto] [--no-stack] [--headless]"
@@ -13,7 +13,7 @@ You are executing **one approved plan**: every task becomes one commit, every PR
 
 The plan is the contract. The commits, branches, and PRs are the output. The plan's checkboxes are the record.
 
-**You orchestrate; you do not write production code.** One `tdd-developer` subagent per repository writes it, one task at a time, test first. You own the workspace, the git topology, the verification, the plan's bookkeeping, and every conversation with the human.
+**You orchestrate; you do not write production code.** One `tdd-developer` subagent per repository writes it, a branch at a time, test first — pausing at every green so you can run the yellow gate. You own the workspace, the git topology, the yellow gate, the judge, the verification, the plan's bookkeeping, and every conversation with the human.
 
 Its readers — of the branches you produce and the plan you leave behind — are the reviewer who receives the PRs, the tester who validates them, and whoever resumes this build tomorrow.
 
@@ -26,7 +26,9 @@ Its readers — of the branches you produce and the plan you leave behind — ar
 
 ## Rules
 
-- **One task, one commit.** The commit message names the task ID. A task that cannot be finished in one commit is drift — stop and ask.
+- **One task, one commit**, made after that task's yellow gate. The commit message names the task ID. A task that cannot be finished in one commit is drift — stop and ask.
+- **One implementer per PR branch.** Its assignment is the whole branch — every task the stack table puts in that PR — and its deliverable is a branch that is ready to open a PR from.
+- **Nothing is ticked on the implementer's word.** A branch report goes to `plan-conformance-judge` first.
 - **The plan is live state.** Tick a task's box only when its acceptance criteria are checked and their verification has actually been run — not when the code is written. Record the commit SHA next to it.
 - **When reality contradicts a document, stop and ask.** Always. A missing file, a criterion that cannot be verified as written, a test that is green when the plan says it should be red, an approach the code will not allow — none of these are yours to route around. See *When reality contradicts the documents*.
 - **Verification is run, not claimed.** You re-run the task's verification yourself against the subagent's commit. A subagent's report is evidence to check, not a result to accept.
@@ -41,19 +43,85 @@ Its readers — of the branches you produce and the plan you leave behind — ar
 
 | | Orchestrator (this skill) | `tdd-developer` (one per repo) |
 |---|---|---|
-| Reads the plan and spec | Yes — whole document | Only the task brief it is handed, plus the code |
+| Unit of work | The whole build | **One PR's branch** — every task the stack table assigns to it |
+| Reads the plan and spec | Yes — whole document | The PR brief it is handed (all of its tasks), plus the code |
 | Worktrees, branches, rebases, pushes, PRs | Yes | Never |
 | Writes production code and tests | Never | Yes, test first |
-| Commits | Never | Yes — exactly one per task |
-| Runs the task's verification | Yes, independently | Yes, and reports the output verbatim |
+| Commits | Never | Yes — exactly one per task, after that task's yellow gate |
+| Runs the yellow-gate reviews | Yes — fans out four reviewers at each green | Never — it pauses and receives the findings |
+| Runs the branch's CI-parity checks | Re-runs them to confirm | Yes, before declaring the branch ready |
+| Judges conformance to the plan | Yes — via `plan-conformance-judge` | Never — it reports what it did, not whether it was right |
 | Ticks the plan's checkboxes | Yes | Never |
 | Talks to the human | Yes — every halt and every checkpoint | Never — reports `blocked` upward instead |
+
+## The TDD cycle and the yellow gate
+
+Every task moves red → green → **yellow** → commit. The yellow phase is not "tidy up if you feel like it": it is a gate with four independent opinions, and it runs **after every green**.
+
+**Red.** The implementer writes the test the task names, runs it, and observes it fail for the right reason.
+
+**Green.** The simplest implementation that passes. The implementer then **pauses and yields** — it does not refactor and does not commit yet.
+
+**Yellow — you run it, not the implementer.** With the implementer idle and the worktree stable, fan out all four in parallel against the task's diff:
+
+| Reviewer | Asks |
+|---|---|
+| `clean-coder-reviewer` | Is this readable and maintainable — naming, functions, SOLID, error handling? |
+| `code-smell-detector` | Which smells did this introduce — bloaters, couplers, dispensables, OO abusers? |
+| `test-design-reviewer` | Do these tests document behavior, and are they atomic, isolated, repeatable? |
+| `/test-mutation` (skill) | Would these tests actually catch the bug — which mutants survive? |
+
+Consolidate into one findings list, split into **blockers** (must be fixed before the commit) and **notes** (recorded, not built). Send it to the implementer.
+
+**Yellow refactor.** The implementer fixes every blocker with the tests staying green — a surviving mutant usually means a missing assertion or a missing test, not a code change. Then it re-runs the tests and **commits the task**, refactor included. One task, one commit, still.
+
+Rules that keep the gate honest:
+
+- **No commit before its yellow gate.** A task that skipped the gate is not done, whatever its tests say.
+- **A surviving mutant is a test defect.** Never kill it by weakening the mutation-tested code; strengthen the test.
+- **The gate reviews the task's diff, not the repo.** Findings about code the task did not touch are notes, never blockers — otherwise the branch grows without anyone deciding it should.
+- **Record it.** Each task's Build Log row carries its gate result: blockers found and fixed, notes deferred, mutants killed/survived.
+
+## Branch quality checks (CI parity)
+
+Before the implementer declares a branch ready, it runs **the checks CI will run** — so red CI is discovered on the machine, not in the PR.
+
+**Derive the list from the repo, not from a template.** Read the CI configuration (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, the `Makefile`/`justfile` targets they call) and take the checks from there. The usual families:
+
+| Family | Typical | Runs when the branch touches |
+|---|---|---|
+| Tests | unit, integration, contract | any code |
+| Formatting | `prettier`, `gofmt`, `black`, `terraform fmt` | files of that language |
+| Linting | `eslint`, `ruff`, `golangci-lint`, `tflint` | files of that language |
+| Types | `tsc`, `mypy` | typed sources |
+| Secrets | `gitleaks`, `trufflehog` | always — a leak can arrive in any file |
+| IaC security | `tfsec`, `checkov`, `terrascan` | `.tf`, Helm, k8s manifests |
+| IaC correctness | `terraform validate`, `terraform plan` | `.tf` |
+| Build | compile, bundle, image build | sources or Dockerfiles |
+
+**Run only what the change touches.** A branch with no `.tf` runs no Terraform checks; a branch that changed one Python package runs that package's suite plus the global gates (secrets, format, lint), not the whole monorepo. The report says which families were **skipped and why** — a silent skip reads as a pass.
+
+**`terraform apply` is not a check.** Run it only when a task's own verification says so and names the environment, and never against production. Everything else stops at `plan`, and the plan output is the evidence. Same for any command that mutates a shared system.
+
+A branch is not ready while any of these is red. A check that cannot run locally (needs a CI-only credential, a runner-only service) is named in the report as *not run locally*, with the reason — never quietly dropped.
+
+## The judge
+
+The implementer reports what it did. **Whether that is what the plan asked for is judged by someone who did not write it.** Dispatch `plan-conformance-judge` — read-only, independent — the moment a branch report arrives, before anything is ticked or pushed.
+
+It gets the PR's tasks from the plan, the spec acceptance criteria they trace to, the branch diff, the commit list, and the implementer's report. It returns a verdict per task — **conforms / deviates / unverifiable** — each with evidence: the file and line, or the missing thing.
+
+- **Deviates** is drift: halt to the human with the judge's evidence. Never let the implementer "just fix it" — the judge found a gap between the plan and reality, and which one is wrong is the human's call.
+- **Unverifiable** means the plan's own criterion could not be checked from the diff. That is also a halt, and usually a plan defect worth naming as one.
+- **Conforms** across every task is what lets you tick the boxes.
+
+The judge never edits, never advises on style (that is the yellow gate's job), and never sees this conversation — its value is that it reads the plan and the diff cold.
 
 ## Modes
 
 **Auto (default).** Tasks run end to end without stopping at task boundaries. You still halt on drift, and you still halt on anything the *Rules* call a halt.
 
-**`--no-auto`.** Every task boundary is a checkpoint. After the commit is made, verified, and the box is ticked, present the compact task report and ask the human: *accept and continue*, *revise this task*, or *stop here*. Do not start the next task, and do not open a PR, before the answer. On *revise*, hand the human's words to the same subagent and re-verify; the revision folds into the same commit (the branch is not pushed yet) unless the human asks otherwise.
+**`--no-auto`.** Every task boundary is a checkpoint, so the implementer is dispatched **one task at a time** instead of one PR at a time. After the task's commit is made, judged, verified, and ticked, present the compact task report and ask the human: *accept and continue*, *revise this task*, or *stop here*. Do not start the next task, and do not open a PR, before the answer. On *revise*, hand the human's words to the same subagent and re-verify; the revision folds into the same commit (the branch is not pushed yet) unless the human asks otherwise.
 
 **Stacked (default).** Follow the plan's PR stack exactly — branches, bases, and the task-to-PR assignment in the stack table.
 
@@ -100,15 +168,24 @@ Two rules hold regardless of strategy: never rewrite history on a branch that is
 
 Opening PR *n* while PR *n+1* is being written is real overlap, but it depends on two mechanics being understood exactly — one is a capability, the other is a constraint.
 
-**A subagent cannot report progress mid-flight.** Its report *is* the end of its turn: it works, it returns, you are notified. There is no partial report from a running agent, and no way to ask one for a status while it works. So do not design around "the implementer tells me branch 1 is done and keeps going" — instead, **let the turn boundary be the branch boundary**: the last task of PR *n* ends a turn, and the implementer is idle at exactly the moment you need it to be. You already know the branch is complete, because the plan's stack table says which task is its last. Continue the same agent with `SendMessage` for the next task; its context survives.
+**A subagent cannot report progress mid-flight.** Its report *is* the end of its turn: it works, it returns, you are notified. There is no partial report from a running agent, and no way to ask one for a status while it works. So the cycle is built out of turns, and the yellow gate is what makes the turn boundaries land where you need them:
+
+| Turn | The implementer does | Then you do |
+|---|---|---|
+| 1 | task 1: red, green — **pauses at green** | run task 1's yellow gate, send the findings |
+| 2 | task 1: yellow refactor, commit → task 2: red, green | run task 2's yellow gate |
+| … | … | … |
+| last | final task's yellow refactor, commit, then the branch's CI-parity checks | judge, verify, tick, then the branch handoff |
+
+One round trip per task, and the implementer is idle at every point where you need the worktree stable. Its *assignment* is the whole PR — it is never re-briefed on the branch, the conventions, or what it already built — while its *turns* pause at each green. Continue the same agent with `SendMessage`; its context survives. Under `--no-auto` the dispatch is per task instead, so the human sits at the same boundaries.
 
 **You can push a branch that is not checked out, from a worktree that is dirty and busy.** A push resolves refs and sends objects; it never reads the index or the working tree. So while the implementer is mid-task on branch *n+1* — uncommitted edits and all — `git -C <worktree> push -u origin <branch-n>` succeeds, the remote lands on the right SHA, and the agent's next commit is unaffected. (Verified, not assumed: a linked worktree on branch `pr2` with a dirty tree pushed `pr1` cleanly, and committing on `pr2` immediately afterwards worked.)
 
 That gives this handoff at every branch boundary. Steps 1–4 happen while the implementer is idle; step 6 is the overlap:
 
-1. The last task of PR *n* is committed, verified, and ticked. The implementer is idle.
-2. **Review the branch** (step 6). Read the diff without the working tree — `git diff <base>...<branch>` — or spin a throwaway `git worktree add --detach <tmp> <branch>` for reviewers that want files. Never review by checking the branch out in the build worktree.
-3. **Fold review blockers in**, by messaging the same idle implementer while it is still on branch *n*. This must happen **before** the next branch is created: fixing branch *n* after branch *n+1* has branched off it forces a restack you did not need.
+1. The branch report for PR *n* has arrived — every task committed through its yellow gate, CI-parity checks green. The implementer is idle.
+2. **Judge and verify** (step 6): `plan-conformance-judge` on the branch, your own re-run of the verifications and the CI-parity checks, then tick the plan.
+3. **Fold any remaining blockers in**, by messaging the same idle implementer while it is still on branch *n*. This must happen **before** the next branch is created: fixing branch *n* after branch *n+1* has branched off it forces a restack you did not need. Read diffs without the working tree — `git diff <base>...<branch>`, or a throwaway `git worktree add --detach <tmp> <branch>` for a reviewer that wants files — never by checking the branch out in the build worktree.
 4. **Create branch *n+1*** off branch *n*'s head, in the same worktree. This is the one step that requires a checkout, and it is safe precisely because the implementer is between turns.
 5. **Dispatch the first task of branch *n+1*** in the background.
 6. **While it runs**, push branch *n* and open PR *n*, then update the neighbouring PR bodies to link the new one. Read-only git and the PR API only — never a checkout, a stash, a rebase, or anything touching the index, while a task is in flight.
@@ -170,11 +247,12 @@ Every item is checked and reported before the first subagent is dispatched. A fa
 
 - [ ] The plan is approved, and its tasks, stack table, and PR assignment are internally consistent (every task in exactly one PR).
 - [ ] Every repository the plan touches is accessible and its base branch exists and is fetched.
-- [ ] The `tdd-developer` agent is available. (If it is not, stop — do not substitute a generic agent silently.)
+- [ ] The `tdd-developer` and `plan-conformance-judge` agents are available, and so are the yellow gate's three reviewers and the `/test-mutation` skill. (If one is not, stop — do not substitute silently, and do not drop a gate.)
 - [ ] The workspace convention is determined (harness, or the default layout).
 - [ ] The force-push policy is determined per repo, with evidence.
 - [ ] Each repo's bootstrap/install runs clean, and **the baseline suite is green on the base branch** — the exact command recorded. A red baseline is a halt.
 - [ ] The verification commands the plan names actually exist in each repo (test runner, migration tool, `terraform`, the CLI a criterion calls).
+- [ ] **The CI-parity check list is derived per repo** from its CI configuration, with the command for each family and how to scope it to a change. Anything CI runs that cannot run locally is named now.
 - [ ] Any credential, environment, or service a task's verification needs is present — or the human is told now, not at task 7.
 
 Report the preflight result as a short table, then start.
@@ -185,59 +263,77 @@ Create the plan folder and one worktree per repo per *Workspace* above; check ou
 
 ### 4. Dispatch one `tdd-developer` per repository — in parallel
 
-Repositories are independent unless the plan says otherwise, so their subagents run at the same time. **One subagent per repo, kept alive for the whole build**: it writes every task on every branch of that repo's stack, in order, until the repo's stack is complete. Continue it with `SendMessage` between tasks so its context — the codebase, the conventions, what it just built — survives; a fresh agent per task pays the ramp-up cost again and drifts from the house style.
+Repositories are independent unless the plan says otherwise, so their implementers run at the same time. **One implementer per repo, kept alive for the whole build**: it works PR by PR, and each dispatch hands it a whole branch. Continue it with `SendMessage`, never re-dispatch — its context (the codebase, the conventions, what it just built) is the reason one instance handles the whole stack.
 
-Where the plan states a cross-repo dependency (a contract must land before its consumer), honor it: hold the dependent repo's task until the producing task's commit exists, and say in the report why it waited.
+Where the plan states a cross-repo dependency (a contract must land before its consumer), honor it: hold the dependent repo's PR until the producing task's commit exists, and say in the report why it waited.
 
-Open the dispatch with the repo brief — worktree path, base branch, the stack for this repo, the conventions and analogous features the plan cites, the repo's rules files, the bootstrap and test commands — and then send one task at a time.
+Open with the repo brief — worktree path, base branch, the whole stack for this repo, the conventions and analogous features the plan cites, the repo's rules files, the bootstrap and test commands, and the repo's CI-parity check list from preflight. Then send one **PR brief** per branch.
 
-**Task brief** (one message per task, verbatim from the plan — do not paraphrase the task):
+**PR brief** (one message per branch; the task blocks verbatim from the plan — do not paraphrase them):
 
 ```
-Repo: <name>          Worktree: <path>          Branch: <branch> (off <base>)
-Task: <the plan's full task block — ID, type, why, spec refs, files table,
-       scenarios if a Product task, acceptance criteria, verification,
-       automated tests, test plan, notes>
-Conventions: <the analogous feature and rules files the plan cites, by path>
-Commit as: <task ID>: <title>
+Repo: <name>       Worktree: <path>       Branch: <branch> (off <base>)
+PR <n> of <m>: <title>
+Deliverable: this branch, ready to open a PR from.
+
+Tasks, in this order:
+<the plan's full task block for each — ID, type, why, spec refs, files table,
+ scenarios if a Product task, acceptance criteria, verification,
+ automated tests, test plan, notes>
+
+Cycle: red → green → PAUSE and report green → I return the yellow findings →
+       you refactor, re-run, and commit that task → next task.
+Commit each task as: <task ID>: <title>
+Before you report the branch ready: run the CI-parity checks that apply to
+what this branch changed — <the repo's list> — and report what you skipped.
 Stop and report `blocked` if anything above does not match the code.
 ```
 
-### 5. Run the task loop (per repo, sequential)
+### 5. Run the branch loop (per repo, sequential)
 
-For each PR in the stack, in order; for each task in that PR, in order:
+For each PR in the stack, in order:
 
-1. **Create the branch** if this is the PR's first task — off the previous PR's head, in the same worktree, always between the implementer's turns (`--no-stack`: one branch for the repo, created once). For every PR after the first, step 6 has already done this.
-2. **Send the task brief.** The subagent writes the failing test, observes it red, implements, refactors, and makes **one commit**. Its report ends its turn; there is no progress to ask for in between.
-3. **Read its report** — commit SHA, files changed, the red output and the green output, verification results, notes. `blocked` → halt to the human (see above).
-4. **Verify it yourself**, now that the implementer is idle. Re-run the task's verification and the repo's suite against that commit. Check the diff against the task's Files table: nothing extra, nothing missing, no disabled tests, one commit. A mismatch is a halt.
-5. **Tick the plan** — the task's box, its acceptance-criteria boxes, and a Build Log row with the commit SHA. Save the file now; this is the memory.
-6. **`--no-auto`:** present the task report and wait for the human. Auto: print the three-line report and continue.
+1. **Create the branch** off the previous PR's head, in the same worktree, always between the implementer's turns (`--no-stack`: one branch for the repo, created once). For every PR after the first, step 6 has already done this.
+2. **Send the PR brief.** Then, for each task in it, one round trip: the implementer reports **green** and pauses → you run the **yellow gate** (four reviewers in parallel on that task's diff) → you send the consolidated blockers and notes → it refactors, re-runs, commits, and moves into the next task's red/green. `blocked` at any point → halt to the human.
+3. **Take the branch report** when the last task is committed and the CI-parity checks have run: the commit list, per-task red/green/yellow evidence, the check results, and what was skipped and why.
+4. Go to step 6 — nothing is ticked and nothing is pushed until the judge has spoken.
 
-Compact task report:
+`--no-auto` dispatches one task per message instead of one PR, and stops at every task boundary; the cycle inside a task is identical.
+
+Compact task report (auto mode, printed at each commit):
 
 ```
 ✓ <task ID> <title> — <repo>/<branch> @ <sha>
   <n> files · red: <the test that failed first> · green: <suite result>
-  Verified: <command → expected result observed>
+  Yellow: <blockers fixed> fixed, <notes> deferred · mutants <killed>/<total>
 ```
 
-### 6. Finish a branch: review, fold in, branch off, push, open the PR
+### 6. Judge the branch, verify it yourself, tick the plan
 
-When a PR's last task is verified and ticked, run the handoff in *Concurrency* — the order is what keeps the overlap safe:
+The implementer is idle now, and nothing about this branch is trusted yet.
 
-- **Review the branch diff before it leaves the machine**, while the implementer is idle. Dispatch the plugin's read-only reviewers in parallel — `clean-coder-reviewer` and `test-design-reviewer`, plus `code-smell-detector` when the branch is large or touches legacy code — pointed at `git diff <base>...<branch>` or a throwaway `--detach` worktree, never at the build worktree's checkout. Take their **blockers** only; note the rest in the PR body as follow-ups rather than widening the branch.
-- **Fold the fixes in now**, through the same implementer, still on this branch. Nothing is pushed yet, so a fix belongs in the commit of the task it corrects (`git commit --fixup` + autosquash, or amend). One task, one commit, still. Doing this after the next branch exists costs a restack.
-- **Re-verify** the branch: suite green at the head, every task's verification re-run.
-- **Create the next branch** off this head in the same worktree, and **dispatch its first task** in the background.
-- **Then push and open the PR** — `git push -u origin <branch>` (retry network failures with backoff), base = the previous PR's branch (or the plan's base for PR 1) — while that task is being written. The push does not need the branch checked out and does not disturb the implementer.
-- Wait for the task report and continue the loop.
+- **Dispatch `plan-conformance-judge`** on the branch: the PR's tasks from the plan, the spec criteria they trace to, `git diff <base>...<branch>`, the commit list, and the implementer's report. It returns *conforms / deviates / unverifiable* per task, with evidence.
+- **Any `deviates` or `unverifiable` is a halt** — take the judge's evidence to the human. The implementer does not get to "just fix it": which side is wrong, the plan or the code, is the human's call.
+- **Verify independently.** Re-run each task's verification from the plan and the branch's CI-parity checks, and read the diff against each task's Files table: nothing extra, nothing missing, no disabled tests, one commit per task in plan order. A mismatch is a halt.
+- **Tick the plan** — every task's box, its acceptance-criteria boxes, and a Build Log row per task with the commit SHA, the yellow-gate result, and the judge's verdict. Save the file now; this is the memory. (If a build dies mid-branch, the commits carry their task IDs — `git log --grep` reconstructs what landed.)
+- **`--no-auto`:** present the branch report and wait before going on.
 
-### 7. Restack when an earlier PR changes
+### 7. Finish the branch: fold in, branch off, push, open the PR
+
+Run the handoff in *Concurrency* — the order is what keeps the overlap safe:
+
+- **Fold in anything still outstanding** through the same idle implementer: judge-driven fixes the human approved, and yellow-gate notes they asked to build after all. A fix belongs in the commit of the task it corrects (`git commit --fixup` + autosquash, or amend) — nothing is pushed yet. Doing this after the next branch exists costs a restack.
+- **Run a cross-task pass only when it earns its keep.** The yellow gates already reviewed every task's diff; a branch-level reviewer sweep is for coherence the per-task view cannot see — duplication introduced across tasks, leftover scaffolding, an abstraction three tasks grew into. Worth it on branches of three or more tasks, or when the gates deferred notes that interact. Read the diff without the working tree.
+- **Re-verify** the branch: suite green at the head, CI-parity checks green.
+- **Create the next branch** off this head in the same worktree, and **dispatch its first PR brief** in the background.
+- **Then push and open the PR** — `git push -u origin <branch>` (retry network failures with backoff), base = the previous PR's branch (or the plan's base for PR 1) — while that branch is being written. The push does not need the branch checked out and does not disturb the implementer. The PR body carries the yellow-gate summary, the CI-parity results including what was skipped, and the judge's verdict.
+- Wait for the next branch report and continue the loop.
+
+### 8. Restack when an earlier PR changes
 
 Review feedback on PR *n* lands as commits on PR *n*'s branch, so everything above it must be updated — using the strategy fixed in preflight (rebase preferred, merge when force push is blocked). After a restack: re-run each affected branch's suite, push, and say in the final report which branches moved and why. Reviews land bottom-up; never restack silently.
 
-### 8. Exit gate (hard stop)
+### 9. Exit gate (hard stop)
 
 Do not report the build finished until every item passes. Hand the plan, the branch diffs, and repository access to an independent read-only subagent (`subagent_type: "general-purpose"`, do not pin a model) for the items it can judge, and check the rest yourself.
 
@@ -245,6 +341,8 @@ Do not report the build finished until every item passes. Hand the plan, the bra
 
 - [ ] Every task in the plan is either ticked with a commit SHA, or explicitly listed as not built with the human's decision recorded.
 - [ ] Every acceptance criterion of every built task is checked, and its verification was actually run — with the output recorded.
+- [ ] Every task passed its yellow gate before it was committed, and `plan-conformance-judge` returned *conforms* for it.
+- [ ] Every branch's CI-parity checks are green, and anything skipped or not runnable locally is named with its reason.
 - [ ] Every spec acceptance criterion the plan traced to a built task is satisfied by what shipped.
 
 **Git and PRs**
@@ -258,11 +356,11 @@ Do not report the build finished until every item passes. Hand the plan, the bra
 
 - [ ] Every halt has a Build Log row: what the document said, what was true, what was decided, by whom.
 - [ ] Every plan amendment made during the build is visible in the document.
-- [ ] Review blockers are resolved or recorded as follow-ups in the PR body; no test was skipped, disabled, or deleted to reach green.
+- [ ] Yellow-gate blockers are resolved and its notes are recorded as follow-ups in the PR body; no test was skipped, disabled, or deleted to reach green, and no surviving mutant was killed by weakening the code.
 
 Fix blockers and re-run only the failing items (max 2 iterations; then surface the outstanding blockers to the human and ask how to proceed). Record the verdicts in the plan.
 
-### 9. Report and stop
+### 10. Report and stop
 
 Print the final report (template below), name what the human must do next — review the stack bottom-up, merge in order, then the plan's rollout steps — and stop. Do not merge, do not enable the flag, do not start the next feature.
 
@@ -277,8 +375,13 @@ The plan is the implementation's memory; keep it accurate in real time.
 
 ````markdown
 ## Build Log
-| Task | Repo | Branch | Commit | Verified | Date |
-|---|---|---|---|---|---|
+| Task | Repo | Branch | Commit | Yellow gate | Judge | Verified | Date |
+|---|---|---|---|---|---|---|---|
+<!-- Yellow gate: blockers fixed / notes deferred / mutants killed-of-total. Judge: conforms. -->
+
+### Branch checks
+| Branch | Checks run | Skipped (why) | Result |
+|---|---|---|---|
 
 ### Drift
 | Task | Document said | What was true | Decision | Decided by |
@@ -306,8 +409,8 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 
 **Plan**: <path>   **Spec**: <path>   **Mode**: auto | --no-auto · stacked | --no-stack
 
-| Repo | Worktree | Branch | Tasks | Commits | Suite | PR |
-|---|---|---|---|---|---|---|
+| Repo | Worktree | Branch | Tasks | Commits | Yellow gates | CI-parity checks | Judge | PR |
+|---|---|---|---|---|---|---|---|---|
 
 **Built**: <n>/<m> tasks. **Not built**: <task IDs and why>.
 
@@ -315,7 +418,10 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 <!-- One line each: what contradicted what, what was decided, by whom. -->
 
 **Review follow-ups**
-<!-- Non-blocking findings recorded in the PR bodies, not built. -->
+<!-- Yellow-gate notes recorded in the PR bodies, not built. -->
+
+**Checks not run locally**
+<!-- Per branch: the check, why it could not run here, and that CI will run it. -->
 
 **Next for the human**
 1. Review the stack bottom-up: <PR links in order>.
