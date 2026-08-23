@@ -22,7 +22,7 @@ If `/goal` is not available in this environment, say so in your first report and
 - **Never merge and never approve.** Not even with a green PR and a passing review. You hand it to a human; they decide.
 - **Never skip, disable, quarantine, or delete a test** to turn a check green. That is the one failure that makes everything else you did worthless.
 - **Never rewrite history on the branch** — no rebase, amend, or force-push on a PR you did not create. A merge commit keeps everyone's checkout valid.
-- **Never work in the build worktree.** The implementer may be writing the next branch there. Get your own: `git worktree add --detach <path> <branch>` or a separate clone.
+- **Never work in a worktree an implementer is using.** Where the build keeps one worktree per PR branch, yours is the one for this PR's branch and the implementer has moved on to the next — use it. Where it does not, get your own: `git worktree add --detach <path> <branch>` or a separate clone. Never share a directory with a working implementer.
 - **Never widen the PR.** You are fixing what CI and reviewers found, not improving the change. A finding that needs new scope is reported, not built.
 - **Never close, reopen, or push an empty commit** to kick CI.
 - **Never argue with a human reviewer.** Apply, or state your reasoning once and leave the decision with them.
@@ -56,7 +56,7 @@ If the base branch moves and the PR conflicts, merge the base in and resolve it 
 
 ## Every push is a stack event
 
-If this PR is part of a stack, **every commit you push changes the base of the PR above it.** Report each push to whoever spawned you — the SHA, what it fixed, and that the children need restacking. Do not restack them yourself; you own one PR.
+If this PR is part of a stack, **every commit you push changes the base of the PR above it.** Report each push to whoever spawned you — the SHA, what it fixed, and that the children need restacking. Do not restack them yourself; you own one PR. That holds whether the stack is managed by hand or by `gh-stack`: `gh stack rebase`/`sync` operate on the whole chain and on shared tracking state, so they belong to the orchestrator, not to you.
 
 ## Reporting
 

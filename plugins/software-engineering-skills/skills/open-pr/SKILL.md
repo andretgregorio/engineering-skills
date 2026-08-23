@@ -22,6 +22,7 @@ You are opening **one pull request** for a branch that is already finished and p
 - **Never open a PR from a branch that is not pushed**, and never against a base the branch does not actually descend from — check both first.
 - **Never merge, approve, or request review from people you inferred.** Reviewers come from the repo's CODEOWNERS or its config, or they are left empty.
 - **One branch, one PR.** If a PR already exists for this branch, update its body instead of opening a second one, and say so.
+- **This skill opens the PR and stops.** It does not monitor it, restack anything, or merge. Whoever called it decides what happens next — under `/build`, that is a `pr-monitor`.
 
 ## Steps
 
@@ -83,5 +84,7 @@ Keep it short. A reviewer should be able to tell in fifteen seconds what changed
 ### 5. Open it
 
 Create the PR against the stated base, as a draft when `--draft` is passed or when the caller says the work is not ready for review. Apply labels and reviewers only from the repo's own configuration.
+
+**When the repo uses [`gh-stack`](https://github.com/github/gh-stack)** (`gh stack --version` succeeds and `.git/gh-stack` tracks this branch), let it own the topology: `gh stack submit` creates or updates a PR per branch with its base set to the branch below and links the chain. Then set the body you composed above — `gh stack submit --auto` generates a title and body of its own, and an auto-generated body is not evidence. Topology from the tool, content from here.
 
 Print the URL, the base, the title, and which template was used. That is the whole output.

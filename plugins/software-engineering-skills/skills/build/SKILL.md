@@ -127,7 +127,9 @@ The judge never edits, never advises on style (that is the yellow gate's job), a
 
 Either way you supply the same evidence, because a PR body is only worth reading if it is true: the tasks that landed with their commits, the yellow-gate summary, the CI-parity results including what was skipped and why, the judge's verdict, how a reviewer or tester verifies it, and the branch's place in the stack.
 
-**Then spawn a `pr-monitor` on it — one per PR, in the background.** Its single goal is to make the PR *ready for human review*, defined as: every CI check green, every automated review finding applied or answered, and every changes-requested review addressed or justified. It runs under the `/goal` skill with that as its success condition. Which means a finished branch is being driven to green while the implementer is still writing the next one — the same overlap that makes eager PRs worth opening.
+Where `gh-stack` is in use, let it place the PR in the stack — `gh stack submit` sets each PR's base to the branch below and links the chain — and let the PR skill write the body. Topology from the tool, evidence from the skill.
+
+**Then spawn a `pr-monitor` on it — one per PR, in the background. This is unconditional:** it does not matter whether the PR was opened by the repository's own skill, by `/open-pr`, or by `gh stack submit`. Every PR this build opens gets a monitor. Its single goal is to make the PR *ready for human review*, defined as: every CI check green, every automated review finding applied or answered, and every changes-requested review addressed or justified. It runs under the `/goal` skill with that as its success condition. Which means a finished branch is being driven to green while the implementer is still writing the next one — the same overlap that makes eager PRs worth opening.
 
 Three things about monitors matter to you as orchestrator:
 
@@ -153,19 +155,26 @@ A monitor never merges and never approves. `ready` is a handoff to a person, not
 
 **Follow the harness first.** Before creating anything, look for the convention this user or project already has: `CLAUDE.md` and `.claude/rules/` at user and project scope, the repo's contributing docs, a configured worktree or workspace root, and any existing sibling worktrees from earlier builds. If a convention exists, use it and say which one you found.
 
-**If none exists**, default to a folder named for the plan, holding one worktree per repository the plan touches:
+**If none exists**, default to a folder named for the plan, holding **one worktree per PR branch**:
 
 ```
 <workspace-root>/<plan-slug>/
-  <repo-a>/     # git worktree of repo A, on the plan's base branch
-  <repo-b>/     # git worktree of repo B
+  <repo-a>/
+    <pr-1-slug>/    # worktree on PR 1's branch
+    <pr-2-slug>/    # worktree on PR 2's branch, created off PR 1's head
+  <repo-b>/
+    <pr-1-slug>/
 ```
 
-- `<plan-slug>` is the plan directory's name (`<TICKET>_<slug>`), so the workspace is traceable to the document.
-- One worktree per repo, no more: **every branch in that repo's stack is created sequentially in the same worktree.** PR 2's branch is created off PR 1's head in place, after PR 1's branch has been pushed.
-- Each worktree starts from a freshly fetched base branch, clean, with the repo's install/bootstrap step run and the suite green.
+- `<plan-slug>` is the plan directory's name (`<TICKET>_<slug>`) and `<pr-slug>` is the PR's branch name, so every path is traceable to the document. (A flat `<plan-slug>--<repo>--<pr-slug>/` works too if your harness prefers one level; keep whichever you pick consistent.)
+- **Create each branch's worktree when its branch is created, not all upfront.** Bootstrapping a checkout for a branch the build may never reach is wasted, and PR *n+1*'s start point does not exist until PR *n* is finished.
+- Each worktree starts clean, with the repo's install/bootstrap step run. The first one also proves the baseline suite green.
 - Never build in the user's primary checkout, and never leave a worktree on a detached HEAD.
-- Worktrees are yours to create, not to destroy: leave them in place at the end and name their paths in the final report, so the human can inspect or resume.
+- **Prune as PRs land**, not before: `git worktree remove` once a PR is merged or closed and no monitor is using it. Everything still open stays, with its path in the final report.
+
+**Why per branch, and when not to.** One worktree per branch buys three things: PR *n*'s `pr-monitor` gets a stable home instead of a throwaway checkout; creating PR *n+1*'s branch (`git worktree add -b <next> <path> <prev-head>`) never touches the worktree the implementer is sitting in; and a restack of a finished branch happens in that branch's own directory, not by juggling checkouts under a working agent.
+
+The cost is real and worth stating: git objects are shared between worktrees, but `node_modules`, virtualenvs, `.terraform`, and build caches are not — each worktree pays its own bootstrap in time and disk. **When a repo is too heavy to duplicate** (a large monorepo, a multi-minute install), fall back to one worktree per repo with branches created sequentially in it, and let monitors use throwaway `git worktree add --detach` checkouts. Decide this per repo in preflight, from the measured bootstrap cost, and record which layout you chose.
 
 ## Stack mechanics
 
@@ -179,6 +188,25 @@ The question is whether the repo accepts a force push on a feature branch, becau
 Determine it from evidence, in this order: the repo's own rules (`CLAUDE.md`, contributing docs) if they mandate one; the branch-protection settings for the branch pattern (`allow_force_pushes`) via the host's API; the presence of a rule that blocks non-fast-forward pushes. **If you cannot establish it, ask the human** — do not discover the answer by trying it. Record the verdict and its evidence in the plan's Build Log.
 
 Two rules hold regardless of strategy: never rewrite history on a branch that is not yours, and never force-push a branch that already carries someone else's commits or a submitted review — ask first.
+
+### `gh-stack`, when the repo has it
+
+[`gh-stack`](https://github.com/github/gh-stack) is GitHub's own `gh` extension for stacked branches and PRs, and where it is available it should own the stack's plumbing instead of hand-rolled git:
+
+| Instead of | Use |
+|---|---|
+| `git checkout -b <next> <prev>` | `gh stack init` for the first branch, `gh stack add <name>` for each one above it |
+| Hand-computed PR bases and cross-links | `gh stack submit` — creates or updates a PR per branch with its base set to the branch below |
+| A manual cascade after an early branch changes | `gh stack rebase` (`--upstack` for just the children), or `gh stack sync` to fetch, rebase, push, and reconcile PR state in one |
+| Reading the chain out of your own notes | `gh stack view` |
+
+Three things to settle before relying on it, in preflight:
+
+- **It rebases, so it needs force push.** On a repo where force push is blocked, `gh stack rebase`/`sync` do not fit the merge-based strategy above — use plain git there. The force-push verdict decides this, not convenience.
+- **Its tracking lives in the repo's `.git` (`.git/gh-stack`, uncommitted), which linked worktrees share.** Treat it as one piece of shared state: run `gh stack` commands from one place — you, the orchestrator — and never concurrently from two worktrees. Confirm where it writes before you depend on it.
+- **It does not write your PR body.** `gh stack submit --auto` will generate a title and body; the body still has to come from the repo's PR skill or `/open-pr`, so submit and then set the composed body. Never let an auto-generated body stand in for the evidence.
+
+Probe for it (`gh stack --version`) rather than assuming: absent, everything below works with plain git, which is the baseline this skill is written against.
 
 **Open each PR as soon as its branch is finished.** The moment a PR's last task is committed, verified, and reviewed, push the branch and open the PR — *do not wait for the rest of the stack*. This overlaps with the next branch being written: see *Concurrency* below for the exact handoff, which is what makes it safe. Each PR body carries: the plan path, its position in the stack (`2 of 3`, base branch, links to the others once they exist), the task checklist it contains, what a reviewer gets, what a tester can verify, and the verification evidence. Link the earlier PRs from the later ones and edit the earlier bodies to link forward as the stack grows.
 
@@ -206,12 +234,12 @@ That gives this handoff at every branch boundary. Steps 1–4 happen while the i
 1. The branch report for PR *n* has arrived — every task committed through its yellow gate, CI-parity checks green. The implementer is idle.
 2. **Judge and verify** (step 6): `plan-conformance-judge` on the branch, your own re-run of the verifications and the CI-parity checks, then tick the plan.
 3. **Fold any remaining blockers in**, by messaging the same idle implementer while it is still on branch *n*. This must happen **before** the next branch is created: fixing branch *n* after branch *n+1* has branched off it forces a restack you did not need. Read diffs without the working tree — `git diff <base>...<branch>`, or a throwaway `git worktree add --detach <tmp> <branch>` for a reviewer that wants files — never by checking the branch out in the build worktree.
-4. **Create branch *n+1*** off branch *n*'s head, in the same worktree. This is the one step that requires a checkout, and it is safe precisely because the implementer is between turns.
+4. **Create branch *n+1*** off branch *n*'s head. With one worktree per branch this is `git worktree add -b <next> <path> <branch-n>` — a new directory, so it never touches the worktree the implementer is in. On the shared-worktree fallback it is a checkout in place, and *that* is the step that requires the implementer to be idle.
 5. **Dispatch the first task of branch *n+1*** in the background.
 6. **While it runs**, push branch *n* and open PR *n*, then update the neighbouring PR bodies to link the new one. Read-only git and the PR API only — never a checkout, a stash, a rebase, or anything touching the index, while a task is in flight.
 7. Wait for the implementer's task report, then continue the loop.
 
-Two safety rules fall out of this and are not negotiable: **never run a working-tree or index command in a worktree whose implementer has a live turn**, and **never restack a branch while an agent is committing on it** — hold it to the next turn boundary.
+Two safety rules fall out of this and are not negotiable: **never run a working-tree or index command in a worktree whose implementer has a live turn**, and **never restack a branch while an agent is committing on it** — hold it to the next turn boundary. Per-branch worktrees shrink the first rule's blast radius to one directory; they do not repeal it.
 
 Across repositories none of this applies: those implementers are independent, in their own worktrees, and genuinely parallel.
 
@@ -269,6 +297,8 @@ Every item is checked and reported before the first subagent is dispatched. A fa
 - [ ] Every repository the plan touches is accessible and its base branch exists and is fetched.
 - [ ] The `tdd-developer`, `plan-conformance-judge`, and `pr-monitor` agents are available, and so are the yellow gate's three reviewers and the `/test-mutation` skill. (If one is not, stop — do not substitute silently, and do not drop a gate.)
 - [ ] **The open-PR path is decided per repo**: the repository's own PR skill if it has one, otherwise `/open-pr`. Record which, and which PR template it will use.
+- [ ] **`gh-stack` is probed for** (`gh stack --version`) and, if present and the repo allows force push, adopted for branch creation, PR bases, and restacks — with where it keeps its tracking confirmed. Absent or unusable: plain git, recorded as such.
+- [ ] **The worktree layout is decided per repo** — one per PR branch, or one per repo when bootstrap is too expensive to duplicate — from the measured bootstrap cost.
 - [ ] The `/goal` skill is available for the monitors, or it is not — either way, say which, because it changes how a monitor runs its loop.
 - [ ] The workspace convention is determined (harness, or the default layout).
 - [ ] The force-push policy is determined per repo, with evidence.
@@ -281,7 +311,7 @@ Report the preflight result as a short table, then start.
 
 ### 3. Set up the workspace
 
-Create the plan folder and one worktree per repo per *Workspace* above; check out the base branch fresh; run bootstrap; leave each worktree clean. Print the paths.
+Create the plan folder per *Workspace* above, and the **first** worktree for each repo — PR 1's branch off a freshly fetched base. Run bootstrap, prove the baseline suite green, leave it clean. Later branches get their worktrees when their branches are created, in step 7. Print the paths.
 
 ### 4. Dispatch one `tdd-developer` per repository — in parallel
 
@@ -315,7 +345,7 @@ Stop and report `blocked` if anything above does not match the code.
 
 For each PR in the stack, in order:
 
-1. **Create the branch** off the previous PR's head, in the same worktree, always between the implementer's turns (`--no-stack`: one branch for the repo, created once). For every PR after the first, step 6 has already done this.
+1. **Create the branch and its worktree** off the previous PR's head — `gh stack add <name>` then `git worktree add <path> <branch>` where `gh-stack` is in use, otherwise `git worktree add -b <branch> <path> <prev-head>` (`--no-stack`: one branch for the repo, created once). On the shared-worktree fallback this is a checkout in place and must happen between the implementer's turns. For every PR after the first, step 7 has already done this.
 2. **Send the PR brief.** Then, for each task in it, one round trip: the implementer reports **green** and pauses → you run the **yellow gate** (four reviewers in parallel on that task's diff) → you send the consolidated blockers and notes → it refactors, re-runs, commits, and moves into the next task's red/green. `blocked` at any point → halt to the human.
 3. **Take the branch report** when the last task is committed and the CI-parity checks have run: the commit list, per-task red/green/yellow evidence, the check results, and what was skipped and why.
 4. Go to step 6 — nothing is ticked and nothing is pushed until the judge has spoken.
@@ -347,7 +377,7 @@ Run the handoff in *Concurrency* — the order is what keeps the overlap safe:
 - **Fold in anything still outstanding** through the same idle implementer: judge-driven fixes the human approved, and yellow-gate notes they asked to build after all. A fix belongs in the commit of the task it corrects (`git commit --fixup` + autosquash, or amend) — nothing is pushed yet. Doing this after the next branch exists costs a restack.
 - **Run a cross-task pass only when it earns its keep.** The yellow gates already reviewed every task's diff; a branch-level reviewer sweep is for coherence the per-task view cannot see — duplication introduced across tasks, leftover scaffolding, an abstraction three tasks grew into. Worth it on branches of three or more tasks, or when the gates deferred notes that interact. Read the diff without the working tree.
 - **Re-verify** the branch: suite green at the head, CI-parity checks green.
-- **Create the next branch** off this head in the same worktree, and **dispatch its first PR brief** in the background.
+- **Create the next branch and its worktree** off this head, and **dispatch its first PR brief** into it in the background. With per-branch worktrees this leaves the finished branch's directory free for its monitor.
 - **Then push and open the PR** — `git push -u origin <branch>` (retry network failures with backoff), base = the previous PR's branch (or the plan's base for PR 1) — while that branch is being written. The push does not need the branch checked out and does not disturb the implementer. Open it through the repo's own PR skill if it has one, otherwise `/open-pr`, handing over the evidence listed in *Opening a PR*.
 - **Spawn a `pr-monitor` on the new PR**, in the background, with its own worktree. It drives that PR to ready-for-review while you carry on with the stack.
 - Wait for the next branch report and continue the loop.
@@ -356,7 +386,7 @@ Run the handoff in *Concurrency* — the order is what keeps the overlap safe:
 
 Commits land on PR *n*'s branch from two places — a human reviewer's feedback, and its `pr-monitor` fixing CI or a bot finding — and either way everything above it must be updated, using the strategy fixed in preflight (rebase preferred, merge when force push is blocked).
 
-- A monitor's push report is your trigger: restack the children, do not ask the monitor to do it.
+- A monitor's push report is your trigger: restack the children, do not ask the monitor to do it. With `gh-stack`, that is `gh stack rebase --upstack` (or `gh stack sync`) run from one place; otherwise the per-repo strategy from preflight.
 - Restack **at a turn boundary**, never while an implementer is committing on the branch you are moving.
 - After a restack: re-run each affected branch's suite and CI-parity checks, push, and tell each affected monitor that its PR's head moved.
 - Say in the final report which branches moved and why. Reviews land bottom-up; never restack silently.
@@ -446,7 +476,7 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 
 **Plan**: <path>   **Spec**: <path>   **Mode**: auto | --no-auto · stacked | --no-stack
 
-| Repo | Worktree | Branch | Tasks | Commits | Yellow gates | CI-parity checks | Judge | PR | Monitor |
+| Repo | Branch | Worktree | Tasks | Commits | Yellow gates | CI-parity checks | Judge | PR | Monitor |
 |---|---|---|---|---|---|---|---|---|---|
 <!-- Monitor: ready | working | blocked (<what it needs>) -->
 

@@ -12,7 +12,7 @@
       },
       "name": "software-engineering-skills",
       "description": "Software Development skills",
-      "version": "0.0.7",
+      "version": "0.0.8",
       "license": "MIT",
       "source": "./plugins/software-engineering-skills"
     }
