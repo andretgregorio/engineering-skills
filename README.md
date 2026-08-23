@@ -46,14 +46,14 @@ Each skill also documents how to run its phase by hand, without the skill.
 
 | Skill | What it does |
 |---|---|
-| [`product-analysis`](plugins/software-engineering-skills/skills/product-analysis/SKILL.md) | Product/business description of a feature before any technical spec exists |
-| [`specs`](plugins/software-engineering-skills/skills/specs/SKILL.md) | Specification artifacts for one feature, with ambiguity resolved against a human |
-| [`plan`](plugins/software-engineering-skills/skills/plan/SKILL.md) | Turns an approved spec into an ordered task list and a proposed PR stack |
-| [`build`](plugins/software-engineering-skills/skills/build/SKILL.md) | Executes an approved plan — worktrees, TDD subagents, yellow-phase review gate, conformance judge, stacked PRs |
-| [`open-pr`](plugins/software-engineering-skills/skills/open-pr/SKILL.md) | Opens one PR for a finished branch, filling the repo's own template. Loses to a repo's own open-PR skill |
-| [`test-mutation`](plugins/software-engineering-skills/skills/test-mutation/SKILL.md) | Mutation testing patterns for checking whether tests actually catch bugs |
-| [`arm-workshop`](plugins/software-engineering-skills/skills/arm-workshop/SKILL.md) | Collaborative technical investigation with agent teams — ARM methodology, risk storming, C4 container diagrams |
-| [`user-story-mapping-workshop`](plugins/software-engineering-skills/skills/user-story-mapping-workshop/SKILL.md) | Story maps and outcome-based release slicing |
+| [`product-analysis`](plugins/software-engineering-skills/skills/product-analysis/README.md) | Product/business description of a feature before any technical spec exists |
+| [`specs`](plugins/software-engineering-skills/skills/specs/README.md) | Specification artifacts for one feature, with ambiguity resolved against a human |
+| [`plan`](plugins/software-engineering-skills/skills/plan/README.md) | Turns an approved spec into an ordered task list and a proposed PR stack |
+| [`build`](plugins/software-engineering-skills/skills/build/README.md) | Executes an approved plan — worktrees, TDD subagents, yellow-phase review gate, conformance judge, stacked PRs |
+| [`open-pr`](plugins/software-engineering-skills/skills/open-pr/README.md) | Opens one PR for a finished branch, filling the repo's own template. Loses to a repo's own open-PR skill |
+| [`test-mutation`](plugins/software-engineering-skills/skills/test-mutation/README.md) | Mutation testing patterns for checking whether tests actually catch bugs |
+| [`arm-workshop`](plugins/software-engineering-skills/skills/arm-workshop/README.md) | Collaborative technical investigation with agent teams — ARM methodology, risk storming, C4 container diagrams |
+| [`user-story-mapping-workshop`](plugins/software-engineering-skills/skills/user-story-mapping-workshop/README.md) | Story maps and outcome-based release slicing |
 
 ### Agents
 
@@ -79,14 +79,15 @@ Full reference: [`plugins/software-engineering-skills/README.md`](plugins/softwa
 plugins/
   software-engineering-skills/
     .claude-plugin/plugin.json      plugin manifest (name, version, license)
-    skills/<name>/SKILL.md          one skill per directory, references/ alongside
+    skills/<name>/SKILL.md          one skill per directory, plus README.md
+                                    and references/ alongside
     agents/<name>/<name>.md         one agent per directory, plus README.md,
                                     references/, templates/, examples/
 ```
 
 ## Contributing
 
-Adding a skill: create `plugins/software-engineering-skills/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`, and where relevant `user-invocable`, `argument-hint`, `model`). The `description` is what Claude matches against, so write it as trigger conditions, not a title. Put anything long in `references/` and load it on demand.
+Adding a skill: create `plugins/software-engineering-skills/skills/<name>/SKILL.md` with YAML frontmatter, plus a `README.md` covering purpose, when to use it, its arguments, and what it produces (`name`, `description`, and where relevant `user-invocable`, `argument-hint`, `model`). The `description` is what Claude matches against, so write it as trigger conditions, not a title. Put anything long in `references/` and load it on demand.
 
 Adding an agent: create `plugins/software-engineering-skills/agents/<name>/<name>.md` with frontmatter (`name`, `description` including `<example>` blocks, `model`, `color`, and `tools` when the agent should be constrained), plus a `README.md` describing purpose, boundaries, and its input/output contract.
 

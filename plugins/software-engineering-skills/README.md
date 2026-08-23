@@ -17,6 +17,8 @@ Four skills, one document each, handed forward in order. Every phase ends by pre
 
 ### `/product-analysis` — product analysis
 
+*[Skill README →](skills/product-analysis/README.md)*
+
 Produces `feature-description.md`: business goals with measured baselines, how the system behaves today, narrative use-case scenarios, scope boundaries (in / out / deferred), technical constraints, assumptions, and an ambiguity log.
 
 Describes **behavior, never implementation**. "We'll add a table" means you have left the skill's scope — record the constraint that pushed you there instead. Every claim about today's behavior or numbers cites its source, or is written as `unverified:` with what would confirm it.
@@ -28,6 +30,8 @@ Use it when a customer-facing behavior has been requested but the intent, succes
 ```
 
 ### `/specs` — specification
+
+*[Skill README →](skills/specs/README.md)*
 
 Produces `spec.md` from the feature description: intent, technical notes, error handling, monitoring, acceptance criteria, assumptions, ambiguity log, and rejected alternatives with the reasoning behind each rejection.
 
@@ -47,6 +51,8 @@ Its value is **resolving ambiguity with a human before build starts** — not sy
 
 ### `/plan` — implementation plan
 
+*[Skill README →](skills/plan/README.md)*
+
 Produces `plan.md`: an ordered checkbox todo list where each task is classified **Engineer** or **Product**, carries 1–3 verifiable acceptance criteria, names the exact files it changes, its automated tests and its test plan — grouped into a stack of independently reviewable PRs.
 
 The plan is also the implementation's memory. Every task and criterion is a checkbox, so a fresh session can pick the work up mid-flight without re-deriving it. It passes a spec-conformance quality gate before it is presented, and stops before any code is written.
@@ -56,6 +62,8 @@ The plan is also the implementation's memory. Every task and criterion is a chec
 ```
 
 ### `/build` — execution
+
+*[Skill README →](skills/build/README.md)*
 
 The first phase that writes production code. For each repository it sets up a worktree and dispatches one `tdd-developer` subagent, which builds one PR branch at a time.
 
@@ -98,6 +106,8 @@ Every workflow skill accepts `--headless` (and infers it when there is provably 
 
 ### `/open-pr`
 
+*[Skill README →](skills/open-pr/README.md)*
+
 Opens **one** PR for a branch that is already finished and pushed. It fills the repository's own template when there is one — headings, order, and checklists preserved — and a built-in template otherwise.
 
 Deliberately small, and strict about evidence: every check result and verification step in the body must be something that actually ran. It never merges, never invents reviewers, never puts secrets in a body, and never opens a second PR for a branch that already has one. **A repository's own open-PR skill always wins over this one.**
@@ -108,9 +118,13 @@ Deliberately small, and strict about evidence: every check result and verificati
 
 ### `test-mutation`
 
+*[Skill README →](skills/test-mutation/README.md)*
+
 Mutation testing patterns for verifying test effectiveness — the difference between "my tests execute this code" and "my tests would notice if this code were wrong". Used as one of the four yellow-gate checks in `/build`, and on its own when analysing branch code for weak or missing tests.
 
 ### `/arm-workshop`
+
+*[Skill README →](skills/arm-workshop/README.md)*
 
 Facilitates a collaborative technical investigation using a team of specialist agents, following Thoughtworks' **Architectural Risk Management** methodology. Agents discuss and challenge each other's alternatives, interrogate the human about business strategy and constraints, run **risk storming** to surface architectural fragilities, and document the decision with C4 Container diagrams — all before any implementation is committed to.
 
@@ -121,6 +135,8 @@ Reference material lives in [`skills/arm-workshop/references/`](skills/arm-works
 ```
 
 ### `/user-story-mapping-workshop`
+
+*[Skill README →](skills/user-story-mapping-workshop/README.md)*
 
 Story maps organised spatially by activity and priority, sliced into releases by outcome. Backbone (activities), ribs (tasks by detail), walking skeleton (the thinnest end-to-end flow across *all* activities — not an MVP), then release slices. After Jeff Patton, with outcome-based prioritization from Gothelf/Seiden and riskiest-assumption-first from Maurya.
 
@@ -161,6 +177,7 @@ The reviewing and judging agents are read-only: `clean-coder-reviewer` and `plan
 ```
 .claude-plugin/plugin.json       manifest — name, version, license
 skills/<name>/SKILL.md           skill definition; long material in references/
+skills/<name>/README.md          human-facing docs for that skill
 agents/<name>/<name>.md          agent definition (frontmatter + system prompt)
 agents/<name>/README.md          human-facing docs for that agent
 agents/<name>/references/        detail loaded on demand
