@@ -1,0 +1,98 @@
+# engineering-skills
+
+A personal [Claude Code](https://claude.com/claude-code) plugin marketplace holding one plugin — **`software-engineering-skills`** — a set of skills and subagents for building software the disciplined way: describe the feature, specify it, plan it, then build it test-first with review gates and an independent conformance judge before anything is called done.
+
+The through-line is **Spec Driven Development**: four skills that hand one document to the next, each ending at a human approval gate, plus the agents that do the writing, reviewing, and judging along the way.
+
+## Install
+
+```
+/plugin marketplace add andretgregorio/engineering-skills
+/plugin install software-engineering-skills@andretgregorio
+```
+
+Then restart Claude Code. The skills appear as slash commands (`/specs`, `/plan`, `/build`, …) and the agents become available to the `Task` tool.
+
+To update later:
+
+```
+/plugin marketplace update andretgregorio
+```
+
+## The Spec Driven Development workflow
+
+Each phase produces one document, stops for human approval, and refuses to do the next phase's job. Nothing writes production code until `/build`.
+
+```
+/product-analysis  →  /specs  →  /plan  →  /build
+feature-              spec.md     plan.md    branches, commits,
+description.md                               stacked PRs
+```
+
+| Phase | Skill | Produces | Hard stop |
+|---|---|---|---|
+| 1. Product analysis | `/product-analysis` | `feature-description.md` — business goals with measured baselines, current behavior, use-case scenarios, scope boundaries, technical constraints | Consistency gate, then human approval |
+| 2. Specification | `/specs` | `spec.md` — intent, technical notes, error handling, monitoring, acceptance criteria, ambiguity log | Consistency gate, then human approval |
+| 3. Planning | `/plan` | `plan.md` — ordered checkbox tasks with acceptance criteria, files, tests and verification, grouped into a stack of reviewable PRs | Spec-conformance gate, then human approval |
+| 4. Build | `/build` | One worktree per repo, one commit per task, one PR per stack entry | Halts whenever reality contradicts the spec or the plan |
+
+Two rules hold across all four: **ambiguity is surfaced, never absorbed** — anything two reasonable people would decide differently goes to the human — and **evidence is never invented** — an unverified claim is written as `unverified:` with what would confirm it.
+
+Each skill also documents how to run its phase by hand, without the skill.
+
+## What's inside
+
+### Skills
+
+| Skill | What it does |
+|---|---|
+| [`product-analysis`](plugins/software-engineering-skills/skills/product-analysis/README.md) | Product/business description of a feature before any technical spec exists |
+| [`specs`](plugins/software-engineering-skills/skills/specs/README.md) | Specification artifacts for one feature, with ambiguity resolved against a human |
+| [`plan`](plugins/software-engineering-skills/skills/plan/README.md) | Turns an approved spec into an ordered task list and a proposed PR stack |
+| [`build`](plugins/software-engineering-skills/skills/build/README.md) | Executes an approved plan — worktrees, TDD subagents, yellow-phase review gate, conformance judge, stacked PRs |
+| [`open-pr`](plugins/software-engineering-skills/skills/open-pr/README.md) | Opens one PR for a finished branch, filling the repo's own template. Loses to a repo's own open-PR skill |
+| [`test-mutation`](plugins/software-engineering-skills/skills/test-mutation/README.md) | Mutation testing patterns for checking whether tests actually catch bugs |
+| [`arm-workshop`](plugins/software-engineering-skills/skills/arm-workshop/README.md) | Collaborative technical investigation with agent teams — ARM methodology, risk storming, C4 container diagrams |
+| [`user-story-mapping-workshop`](plugins/software-engineering-skills/skills/user-story-mapping-workshop/README.md) | Story maps and outcome-based release slicing |
+
+### Agents
+
+| Agent | Role |
+|---|---|
+| [`tdd-developer`](plugins/software-engineering-skills/agents/tdd-developer/README.md) | Implements one planned task at a time, test-first, one commit per task |
+| [`plan-conformance-judge`](plugins/software-engineering-skills/agents/plan-conformance-judge/README.md) | Read-only judge: is this branch what the plan said it would be? |
+| [`pr-monitor`](plugins/software-engineering-skills/agents/pr-monitor/README.md) | Drives one open PR to green CI and answered bot findings |
+| [`clean-coder-reviewer`](plugins/software-engineering-skills/agents/clean-coder-reviewer/README.md) | Clean Code / SOLID review, with pragmatic trade-offs |
+| [`code-smell-detector`](plugins/software-engineering-skills/agents/code-smell-detector/README.md) | Detects code smells across 10 categories and 50+ smells |
+| [`test-design-reviewer`](plugins/software-engineering-skills/agents/test-design-reviewer/README.md) | Scores test quality against Dave Farley's properties of good tests |
+| [`scenario-story-writer`](plugins/software-engineering-skills/agents/scenario-story-writer/README.md) | Narrative user scenarios and diagnostic/error design, instead of "As a… I want…" |
+
+The four review agents — clean coder, code smells, test design, plus the `test-mutation` skill — are what `/build` fans out as its **yellow gate** after every green, before any commit.
+
+Full reference: [`plugins/software-engineering-skills/README.md`](plugins/software-engineering-skills/README.md).
+
+## Repository layout
+
+```
+.claude-plugin/
+  marketplace.json                  marketplace manifest (name, owner, plugin list)
+plugins/
+  software-engineering-skills/
+    .claude-plugin/plugin.json      plugin manifest (name, version, license)
+    skills/<name>/SKILL.md          one skill per directory, plus README.md
+                                    and references/ alongside
+    agents/<name>/<name>.md         one agent per directory, plus README.md,
+                                    references/, templates/, examples/
+```
+
+## Contributing
+
+Adding a skill: create `plugins/software-engineering-skills/skills/<name>/SKILL.md` with YAML frontmatter, plus a `README.md` covering purpose, when to use it, its arguments, and what it produces (`name`, `description`, and where relevant `user-invocable`, `argument-hint`, `model`). The `description` is what Claude matches against, so write it as trigger conditions, not a title. Put anything long in `references/` and load it on demand.
+
+Adding an agent: create `plugins/software-engineering-skills/agents/<name>/<name>.md` with frontmatter (`name`, `description` including `<example>` blocks, `model`, `color`, and `tools` when the agent should be constrained), plus a `README.md` describing purpose, boundaries, and its input/output contract.
+
+Bump `version` in **both** `.claude-plugin/marketplace.json` and `plugins/software-engineering-skills/.claude-plugin/plugin.json` — they are kept in step.
+
+## License
+
+MIT.
