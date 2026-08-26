@@ -13,7 +13,7 @@ Its readers are a product stakeholder who must recognise their intent in it, and
 
 ## What this skill does not produce
 
-No implementation plan, no task breakdown, no architecture, no test scenarios in any test framework's format, no code. If you find yourself writing "we'll add a table" or "the endpoint should accept", you have left this skill's scope — describe the observable behavior instead and record the constraint that pushed you there under Technical Constraints.
+No implementation plan, no task breakdown, no architecture, no test scenarios in any test framework's format, no code, and no interface design — the journey and its emotional arc are in scope, the wireframes and chosen patterns are `/specs`' (step 5). If you find yourself writing "we'll add a table" or "the endpoint should accept", you have left this skill's scope — describe the observable behavior instead and record the constraint that pushed you there under Technical Constraints.
 
 ## Rules
 
@@ -23,7 +23,7 @@ No implementation plan, no task breakdown, no architecture, no test scenarios in
 4. **Human approval is a hard stop.** This skill ends by presenting the document. It never auto-continues into planning or implementation.
 5. **Preserve human language.** The human owns the intent; you improve precision. Max 2 critique-refine iterations per artifact — if it does not stabilize, say so and ask how to proceed.
 6. **Document decisions, not just outcomes.** When the human rejects a suggestion, record what was rejected and why. That reasoning is the part that gets lost.
-7. **Ambiguity is surfaced, not absorbed.** Any decision two reasonable people would make differently goes to the human. See step 6.
+7. **Ambiguity is surfaced, not absorbed.** Any decision two reasonable people would make differently goes to the human. See step 7.
 
 ## Headless mode
 
@@ -78,7 +78,31 @@ Require back: happy paths under realistic (imperfect) conditions, stress/edge sc
 
 Fold the agent's output into the document yourself: keep the narratives and observable outcomes, move anything implementation-flavored into Technical Constraints, and drop scenarios that do not describe an aspect of *this* feature.
 
-### 5. Draft the artifacts collaboratively
+### 5. Refine the UI surface (only when the feature has one)
+
+When the feature changes something a person sees or operates, the product description has to say what the journey is and how it should feel. Both are product intent, and neither is recoverable later from a spec that never asked.
+
+**Does it have a UI surface?** Yes if the feature adds or changes any of: a screen, page, or view; a form or field; a list, table, or filter; an empty, loading, or error state; a notification, email, or export; a CLI command, flag, or its output. If none apply, write one line under UI/UX Considerations saying so and go to step 6 — do not invent a surface to fill the section.
+
+**Load the design skills before drafting.** Invoke each through the Skill tool by name (`software-engineering-skills:<name>` if a name collides with another plugin's):
+
+- `ux-principles` — always. Nielsen's heuristics, the cognitive-load laws, and the WCAG 2.2 AA minimums a product owner has to require rather than hope for.
+- `ux-emotional-patterns` — always for a surface a customer touches. Its journey-phase-to-target-emotion table is the tool for the arc below; empty states and the first-run experience are product decisions here, not polish later.
+- `design-methodology` — **Phases 1 and 2 only** (Journey Mapping, Emotional Design). Phases 3 and 4, prototyping and the integration check, belong to `/specs`.
+- `ux-web-patterns` / `ux-tui-patterns` — only when a platform constraint changes product scope ("it has to work one-handed on mobile", "it has to be scriptable in CI"). Choosing the patterns themselves is `/specs`' job.
+
+**What to produce.**
+
+1. **The journey** — the ordered steps someone walks to complete the goal, each with what they do and what they see. Cite step 3's findings for the steps that already exist, so the gap between today and the feature is visible rather than implied.
+2. **The emotional arc** — start, middle, and end states, named as one of `design-methodology`'s arc patterns when one fits (confidence building, discovery joy, problem relief). Then a target emotion per step and the design lever meant to achieve it. An arc that runs positive-to-negative needs an explicit warning or buffer step — name it.
+3. **The UX-shaped scope boundaries** — surfaces this feature deliberately leaves alone, and the states it will not handle in this slice. These belong in Scope too, not only here.
+4. **The UX constraints** — the design system or component library it must live inside, the accessibility floor, the platforms and viewports it must serve, the terminology the domain glossary already fixes. Each goes under Technical Constraints with its reason.
+
+**Then close the loop with step 4.** Every journey step needs a scenario covering it or an explicit out-of-scope line — the unhappy steps included. Where the arc names an emotion at a step no scenario reaches (the first-run empty state and the error path are the usual gaps), send the gap back to `scenario-story-writer` rather than writing the scenario yourself.
+
+**Boundaries.** No mockups, no wireframes, no component names, no Gherkin. `design-methodology`'s journey YAML and per-step Gherkin are a checklist of what to think about at this stage, not the deliverable, and its `docs/feature/{id}/discuss/` output paths do not apply — this skill's paths are in step 9. Every UI question two reasonable people would answer differently goes to step 7 like any other ambiguity: a design pattern is not a way to settle a product decision.
+
+### 6. Draft the artifacts collaboratively
 
 | Artifact | Purpose | Format |
 |---|---|---|
@@ -88,12 +112,13 @@ Fold the agent's output into the document yourself: keep the narratives and obse
 | Scope | What is in, and explicitly what is out | Two bullet lists |
 | Use Case Scenarios | The narrative scenarios and their observable outcomes | Per `scenario-story-writer`'s format |
 | Technical Constraints | What the solution must live with or respect — not how it is built | Bullet list, each with its reason |
+| UI/UX Considerations | The journey, its emotional arc, and the UX constraints — when the feature has a user-facing surface | Ordered journey steps plus an arc table |
 
 Draft with the human, not at them. Show a section, take the correction, move on.
 
-### 6. Ambiguity Resolution Protocol (hard step — never skip)
+### 7. Ambiguity Resolution Protocol (hard step — never skip)
 
-Collect ambiguities throughout steps 1–5; resolve them here, in one batch.
+Collect ambiguities throughout steps 1–6; resolve them here, in one batch.
 
 1. **Attempt inference** from existing codebase behavior (especially the integration tests), domain conventions, or unambiguous implication.
 2. **Classify each one:**
@@ -103,7 +128,7 @@ Collect ambiguities throughout steps 1–5; resolve them here, in one batch.
 
 `inferable` is not a convenient default. The test is reliability, not plausibility: would a developer *land on the same answer*, or merely find yours reasonable? If in doubt, ask. Record every classification in the `## Ambiguity Log` — it is the audit trail, and downstream phases carry it into the eventual PR.
 
-### 7. Cross-artifact consistency gate
+### 8. Cross-artifact consistency gate
 
 Hand the drafted document to an independent read-only subagent (`subagent_type: "general-purpose"`, do not pin a model) and have it return a verdict per item with the specific evidence for any failure:
 
@@ -112,6 +137,8 @@ Hand the drafted document to an independent read-only subagent (`subagent_type: 
 - [ ] Every scenario describes one aspect of this feature and states an observable outcome.
 - [ ] Scope in/out is explicit, and nothing in the scenarios falls outside it.
 - [ ] Technical constraints trace to the scenarios or the business goals — no orphans, no disguised implementation decisions.
+- [ ] On a UI feature: every journey step is covered by a scenario or an explicit out-of-scope line, and every step has a target emotion with a design lever.
+- [ ] On a UI feature: the UX constraints (design system, accessibility floor, platforms, terminology) are recorded under Technical Constraints, and no mockup, component name, or Gherkin has leaked in.
 - [ ] Concepts are named consistently across artifacts, using the product-context domain glossary.
 - [ ] No artifact contradicts another, or contradicts current system behavior as documented by the integration tests.
 - [ ] Every claim is evidence-backed or explicitly marked `unverified:`.
@@ -121,7 +148,7 @@ Fix blockers and re-run only the failing items (max 2 iterations; then surface t
 
 **Hard stop: do not finalize until every item passes.**
 
-### 8. Persist and present for approval (hard stop)
+### 9. Persist and present for approval (hard stop)
 
 Write to the location the user has configured for product docs at the user or project scope. If none is configured, default to `<primary repo>/docs/specs/<TICKET>_<slug>/feature-description.md` — one folder per feature, so a later spec and plan sit alongside it. If the repo already keeps product docs in `docs/prd/`, use that instead.
 
@@ -159,6 +186,20 @@ Write to the location the user has configured for product docs at the user or pr
 ## Technical Constraints
 ...
 
+## UI/UX Considerations
+<!-- Omit nothing here on a UI feature; write "None — this feature changes no user-facing
+     surface." when it genuinely has none. No mockups — those are the spec's job. -->
+
+**Platform**: <web | CLI/TUI | both | other>
+
+### Journey
+<!-- Ordered steps: what the person does, what they see, and whether the step exists today. -->
+
+### Emotional Arc
+| Step | Target emotion | Design lever |
+|---|---|---|
+<!-- Arc pattern: <confidence building | discovery joy | problem relief | none fits> -->
+
 ## Assumptions
 <!-- Things taken as true without confirmation, and what each one rests on. -->
 
@@ -181,10 +222,10 @@ Write to the location the user has configured for product docs at the user or pr
      code paths, docs, tickets. A reader must be able to re-check any claim. -->
 ```
 
-Print the file path, show the human the Intent, Business Goals, Scope, and Unresolved Ambiguities, and ask them to approve or request changes. **Only on explicit approval** set `**Status**: approved`.
+Print the file path, show the human the Intent, Business Goals, Scope, and Unresolved Ambiguities — plus the journey and its emotional arc whenever the feature has a surface — and ask them to approve or request changes. **Only on explicit approval** set `**Status**: approved`.
 
 Then stop. Name the natural next step — writing the technical spec, or `/plan` if the team goes straight there — but do not start it. (Headless: leave `**Status**: draft`, print the path, and halt.)
 
 ## Running this phase by hand (no skill)
 
-The artifact matters, not the automation. A human doing this manually: read the product-context docs and the integration tests for the affected surface; pull the baseline numbers from Amplitude before agreeing to any target; write the intent, goals, current behavior, scope, and scenarios; list every open question and get a stakeholder to answer it before anyone writes a spec. The discipline that carries the value is refusing to state a number you have not measured, and refusing to resolve a product question by guessing.
+The artifact matters, not the automation. A human doing this manually: read the product-context docs and the integration tests for the affected surface; pull the baseline numbers from Amplitude before agreeing to any target; write the intent, goals, current behavior, scope, and scenarios; for anything with a screen or a command, walk the journey step by step and say how each step should feel before arguing about how it looks; list every open question and get a stakeholder to answer it before anyone writes a spec. The discipline that carries the value is refusing to state a number you have not measured, and refusing to resolve a product question by guessing.

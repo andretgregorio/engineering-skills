@@ -23,6 +23,8 @@ Produces `feature-description.md`: business goals with measured baselines, how t
 
 Describes **behavior, never implementation**. "We'll add a table" means you have left the skill's scope — record the constraint that pushed you there instead. Every claim about today's behavior or numbers cites its source, or is written as `unverified:` with what would confirm it.
 
+When the feature touches anything a person sees or operates, step 5 loads the design skills and adds the journey and its **emotional arc** — product intent that is not recoverable later from a spec that never asked. Mockups and pattern choices are deliberately left to `/specs`.
+
 Use it when a customer-facing behavior has been requested but the intent, success metrics, or scope still need clarification.
 
 ```
@@ -41,9 +43,12 @@ Produces `spec.md` from the feature description: intent, technical notes, error 
 | Technical notes | Where the change fits; components, interfaces, dependencies, constraints |
 | Error handling | Anticipated failures, user impact, mitigation |
 | Monitoring | What to watch during rollout, per metric |
+| UI/UX specification | Surfaces and their states, pattern choices, a low-fidelity prototype, an integration check |
 | Acceptance criteria | Observable outcomes with pass/fail conditions |
 
 Its value is **resolving ambiguity with a human before build starts** — not synthesizing edge cases. Gherkin scenarios are authored later, per slice, in `/plan`. Spikes are allowed and are documented; their code never reaches the base branch.
+
+On a UI feature, step 6 loads the platform pattern skill and prototypes the surface at low fidelity: every surface declares its populated, empty, loading and error states, every pattern choice names the alternative it beat, and the accessibility criteria carry numbers rather than intentions. Beyond two surfaces the mockups move to a `ui-prototype.md` sibling, approved together with the spec.
 
 ```
 /specs "<feature name or path to feature-description.md>" [--ticket <ID>] [--headless]
@@ -56,6 +61,8 @@ Its value is **resolving ambiguity with a human before build starts** — not sy
 Produces `plan.md`: an ordered checkbox todo list where each task is classified **Engineer** or **Product**, carries 1–3 verifiable acceptance criteria, names the exact files it changes, its automated tests and its test plan — grouped into a stack of independently reviewable PRs.
 
 The plan is also the implementation's memory. Every task and criterion is a checkbox, so a fresh session can pick the work up mid-flight without re-deriving it. It passes a spec-conformance quality gate before it is presented, and stops before any code is written.
+
+On a UI feature the spec's UI/UX specification and its prototype are **hard inputs**: scenarios are written against the surface that was approved, a Product task touching a surface owes empty-state, error-state and keyboard scenarios, and two gate items catch the leaks — a spec'd surface claimed by no task, and a prototype component in no Files table.
 
 ```
 /plan [--spec-file <spec_file>] [--ticket <ID>] [--headless]
@@ -139,6 +146,22 @@ Reference material lives in [`skills/arm-workshop/references/`](skills/arm-works
 *[Skill README →](skills/user-story-mapping-workshop/README.md)*
 
 Story maps organised spatially by activity and priority, sliced into releases by outcome. Backbone (activities), ribs (tasks by detail), walking skeleton (the thinnest end-to-end flow across *all* activities — not an MVP), then release slices. After Jeff Patton, with outcome-based prioritization from Gothelf/Seiden and riskiest-assumption-first from Maurya.
+
+---
+
+## Design and UX reference skills
+
+Five **reference skills**: not user-invocable and never invoked directly, they are loaded through the Skill tool by the two refining phases above. Splitting them this way keeps the design vocabulary out of every context that does not need it.
+
+| Skill | Loaded by | For |
+|---|---|---|
+| [`design-methodology`](skills/design-methodology/README.md) | `/product-analysis` (Phases 1–2) · `/specs` (Phases 3–4) | Apple LeanUX++ workflow, journey schema, named emotional arc patterns, clig.dev CLI principles |
+| [`ux-principles`](skills/ux-principles/README.md) | both, always on a UI feature | Nielsen's heuristics, Norman's principles, Fitts/Hick/Miller, progressive disclosure, WCAG 2.2 AA minimums, review checklist |
+| [`ux-emotional-patterns`](skills/ux-emotional-patterns/README.md) | both | Walter's hierarchy, surface vs deep delight, empty states, first-run onboarding, tone of voice, microinteractions |
+| [`ux-web-patterns`](skills/ux-web-patterns/README.md) | `/specs` · `/plan`, by platform | Navigation, forms and validation, data display, responsive breakpoints, motion, design tokens, anti-patterns |
+| [`ux-tui-patterns`](skills/ux-tui-patterns/README.md) | `/specs` · `/plan`, by platform | Argument and subcommand design, TUI architectures, colour and output contracts, error and help text, progress |
+
+Two boundaries hold across all five, because their source material predates this pipeline: **their own output paths and timeboxes do not apply** — the calling skill's persist step decides where anything is written — and **their Gherkin is never pasted**. `ux-web-patterns` ships a Gherkin acceptance-criteria template whose one legitimate reader is `/plan` step 4, and only for the coverage shape it implies: happy path, error state, empty state, keyboard accessibility.
 
 ---
 

@@ -16,6 +16,7 @@ Its readers are the engineer who will plan and build the feature, and the review
 
 - **Implementation plan:** The implementation plan that will guide the commits will be produced in the following document, not this one.
 - **Implemented tests:** Although the acceptance criteria should be written as implementable tests, the test implementation will be created afterwards.
+- **Finished visual design:** The UI/UX section prototypes at low fidelity — layout, states, and pattern choices. Pixel design, final copy, and asset production are not this document's job.
 - **Committed code:** This skill never commits production code into the base branch. Every code eventually written by this skill can be documented as a "spike" document, but never committed as source code.
 
 ## Rules
@@ -27,7 +28,7 @@ Its readers are the engineer who will plan and build the feature, and the review
 - **Preserve human language.** The human owns the intent; you improve precision. Max 2 critique-refine iterations per artifact — if it does not stabilize, say so and ask how to proceed.
 - **Be succinct:** Always prefer straightforward language, trying to be more concise and writing fewer paragraphs of text. Focus on what is important. This should be close to a one-pager as much as possible.
 - **Document decisions, not just outcomes.** When the human rejects a suggestion, record what was rejected and why. That reasoning is the part that gets lost.
-- **Ambiguity is surfaced, not absorbed.** Any decision two reasonable people would make differently goes to the human. See step 6.
+- **Ambiguity is surfaced, not absorbed.** Any decision two reasonable people would make differently goes to the human. See step 7.
 
 ## Artifacts
 
@@ -37,6 +38,7 @@ Its readers are the engineer who will plan and build the feature, and the review
 | Technical notes | Where the change fits and what constraints apply | Structured notes: components, interfaces, dependencies, constraints |
 | Error handling | Anticipates possible failures and how the system can survive them | Structured notes: description, user impact, mitigation |
 | Monitoring | Describes what should be monitored during rollout | Structured notes: metric name, description, needs implementation |
+| UI/UX specification | What the surface is, in which states, following which patterns — when the feature has one | Low-fidelity mockups plus pattern choices and per-state behavior |
 | Acceptance criteria | Observable outcomes and quality thresholds that define "done" | Measurable criteria with pass/fail conditions |
 
 Observable behavior is captured as Gherkin in `/plan`, one scenario set per slice. This document's job is to make that authoring unambiguous, not to pre-write it.
@@ -48,7 +50,7 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 - **Never wait for an answer, never fake one.** For each `requires-stakeholder-input` item, adopt the most defensible assumption, record it in the Ambiguity Log as `assumed (headless)`, and list it under `## Unresolved Ambiguities`.
 - **Genuine coin flips halt.** When two options are equally defensible and the choice materially changes the feature, stop and report rather than picking.
 - **The approval gate is never auto-approved.** Write the document with `**Status**: draft`, print the path, and halt.
-- **Never silently overwrite** an existing `spec.md` — halt instead.
+- **Never silently overwrite** an existing `spec.md` or `ui-prototype.md` — halt instead.
 - Spikes still run, and still never reach the base branch.
 
 ## Steps
@@ -57,7 +59,7 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 
 Two upstream documents decide what this spec is allowed to cover. Read them first, then fill in the rest yourself before asking the human anything the code could answer.
 
-**`feature-description.md` — the product input.** Written by `/describe-feature`: business goals with baselines, current behavior, scope, use-case scenarios, technical constraints. Do not re-derive it and do not contradict it; carry its `## Unresolved Ambiguities` into step 6. If it does not exist and the product intent, success metric, or scope boundary is unclear, say so and offer `/describe-feature` before continuing — if the intent is genuinely clear without it, proceed and record where the intent came from.
+**`feature-description.md` — the product input.** Written by `/describe-feature`: business goals with baselines, current behavior, scope, use-case scenarios, technical constraints. Do not re-derive it and do not contradict it; carry its `## Unresolved Ambiguities` into step 7. If it does not exist and the product intent, success metric, or scope boundary is unclear, say so and offer `/describe-feature` before continuing — if the intent is genuinely clear without it, proceed and record where the intent came from.
 
 **`story-map.md` — the slice boundary.** Written by `/user-story-mapping-workshop`, together with `prioritization.md`. **When a story map exists, this spec resolves exactly one rib** — one task under one backbone activity — not an activity, not a release slice, not the map. So:
 
@@ -105,7 +107,7 @@ Structured notes, not prose: components touched, interfaces and contracts, depen
 1. Timebox it (about an hour). Run it in a scratch branch or worktree, never on the base branch.
 2. Record the outcome in the document as `Spike: <question> → <result> (<where it ran, what you ran>)`.
 3. Throw the code away. A spike's value is the answer, not the diff — nothing it produced is committed as source code.
-4. If the box runs out, write the claim as `unverified:` with what would confirm it, and let step 6 decide whether it blocks.
+4. If the box runs out, write the claim as `unverified:` with what would confirm it, and let step 7 decide whether it blocks.
 
 **Escalate instead of guessing.** If the notes require weighing genuinely different designs, or the risks are architectural rather than local, stop and propose `/arm-workshop`. Its technical-investigation document then becomes this section's source, cited by path — do not re-litigate it here.
 
@@ -117,7 +119,7 @@ Out of scope for this section: task ordering, file-by-file diffs, and anything t
 
 | Failure mode | Trigger | User impact | System behavior / mitigation |
 
-Every failure with a user-visible impact must either get an acceptance criterion in step 7, or an explicit line saying the risk is accepted and unhandled. Silence is not a decision.
+Every failure with a user-visible impact must either get an acceptance criterion in step 8, or an explicit line saying the risk is accepted and unhandled. Silence is not a decision.
 
 **Monitoring.** What tells us this feature is healthy during rollout, and what tells us to roll it back.
 
@@ -127,9 +129,39 @@ Every failure with a user-visible impact must either get an acceptance criterion
 - At least one row is a **rollout guardrail**: the signal that says stop, with its threshold and who watches it.
 - A metric marked *needs implementation* is also a technical note — emitting it is part of the work, and `/plan` must see it.
 
-### 6. Ambiguity Resolution Protocol (hard step — never skip)
+### 6. UI/UX specification (only when the feature has a surface)
 
-Collect ambiguities throughout steps 1–5; resolve them here, in one batch, **before** the acceptance criteria are written.
+The product description said what the journey is and how it should feel. This step says what the surface *is* — concretely enough that `/plan` can write scenarios against it and a reviewer can tell whether what shipped is what was agreed.
+
+**Does it have a UI surface?** Same test as `/describe-feature`: a screen, view, form, field, list, filter, empty/loading/error state, notification, email, export, or a CLI command, flag, or its output. If none, write one line saying so and go to step 7 — do not design a surface the feature does not have.
+
+**Start from the upstream section, don't re-derive it.** `feature-description.md`'s `## UI/UX Considerations` owns the journey and the emotional arc. Refine and contradict nothing; if the journey turns out to be wrong, that is a product change — take it back to the human, do not quietly redraw it.
+
+**Load the design skills.** Invoke each through the Skill tool by name (`software-engineering-skills:<name>` if a name collides with another plugin's):
+
+- `ux-principles` — always. Its WCAG 2.2 AA product-owner minimums and review checklist are what the criteria in step 8 are written from.
+- `ux-web-patterns` **or** `ux-tui-patterns` — by platform, both when the feature ships to both. This is where the pattern choice is made.
+- `ux-emotional-patterns` — for the empty, first-run, and error states, and for the copy tone at each.
+- `design-methodology` — **Phases 3 and 4 only** (Prototyping, Integration Check). Phases 1 and 2 already ran in `/describe-feature`.
+
+**Reuse before inventing (the evidence rule, applied to UI).** Before naming a pattern, find what the repo already has — design system, component library, existing screens doing the same job — and cite it by path. A component that does not exist yet is a technical note in step 4, not a drawing. Never assert that a library component supports something from memory; that is exactly what the spike protocol is for, and a UI spike is thrown away like any other.
+
+**Prototype at low fidelity.** One ASCII wireframe or TUI mockup per surface or journey step — layout, hierarchy, and the labels that carry meaning. Progressive fidelity: enough to argue about, never a pixel design.
+
+- Up to two surfaces: inline in the spec.
+- More than two, or once the mockups crowd out the rest of the document, write them to `ui-prototype.md` beside the spec and reference it from the header line. The one-pager rule still holds for `spec.md`.
+
+**Every surface declares its states.** For each one: populated, empty (first-run and zero-results are different states), loading, and error. Every user-visible failure mode from step 5 gets its treatment named here — where the message appears, what it says, and what the person does next. A state you decide not to handle is written down as not handled.
+
+**Name the patterns and the losers.** Each choice cites the platform skill's "when to use" and the alternative it beat; the alternatives go to `## Rejected Alternatives`. "Side navigation, per `ux-web-patterns` (many sections, admin-shaped); top nav rejected — 14 sections exceeds the 5–7 limit" is the shape.
+
+**Integration check (Phase 4).** Across the journey's steps: the same concept is called the same thing everywhere and matches the domain glossary; a value shown in more than one place has one source; nothing depends on the person remembering something the previous step did not give them.
+
+**Boundaries.** No Gherkin — `ux-web-patterns` ships an acceptance-criteria template in Gherkin and it is **not for this document**; hand it to `/plan`, which authors scenarios per slice. `design-methodology`'s output paths (`docs/feature/{id}/discuss/`) and day-count timeboxes do not apply — this skill's paths are in step 10. Prototype code, like any spike, never reaches the base branch. Every design question two reasonable people would answer differently goes to step 7.
+
+### 7. Ambiguity Resolution Protocol (hard step — never skip)
+
+Collect ambiguities throughout steps 1–6; resolve them here, in one batch, **before** the acceptance criteria are written.
 
 1. **Attempt inference** from existing codebase behavior (especially the integration tests), domain conventions, the product description, or unambiguous implication.
 2. **Classify each one:**
@@ -139,7 +171,7 @@ Collect ambiguities throughout steps 1–5; resolve them here, in one batch, **b
 
 `inferable` is not a convenient default. The test is reliability, not plausibility: would a developer *land on the same answer*, or merely find yours reasonable? If in doubt, ask. Record every classification in the `## Ambiguity Log` — it is the audit trail, and downstream phases carry it into the eventual PR.
 
-### 7. Write the acceptance criteria
+### 8. Write the acceptance criteria
 
 Observable outcomes with pass/fail conditions. Each one must be implementable as a test — and must not be written as one: no Gherkin, no framework, no test names. `/plan` authors the scenarios, per slice, from these.
 
@@ -147,8 +179,9 @@ Observable outcomes with pass/fail conditions. Each one must be implementable as
 - Every user-visible failure mode from step 5 maps to a criterion, or is logged as accepted.
 - Every quality threshold names a number, a unit, and where it is measured (`p95 < 400ms on the Datadog APM endpoint dashboard`, not "fast").
 - Criteria describe what is visible at the boundary — to a user or a calling client — never internal state, and never a class or function name.
+- On a UI feature: every state declared in step 6 has a criterion, and the accessibility floor is written as numbers, not intentions — contrast ratio, target size, focus visibility, keyboard reachability, feedback within 100ms. `ux-principles`' checklist is the source; a criterion citing "accessible" is not one.
 
-### 8. Cross-artifact consistency gate
+### 9. Cross-artifact consistency gate
 
 Hand the drafted document to an independent read-only subagent (`subagent_type: "general-purpose"`, do not pin a model) and have it return a verdict per item, with the specific evidence for any failure:
 
@@ -158,6 +191,9 @@ Hand the drafted document to an independent read-only subagent (`subagent_type: 
 - [ ] Every acceptance criterion is observable, has a pass/fail condition, and states no implementation detail.
 - [ ] Every technical note is evidence-backed — path, test, measurement, spike, or `/arm-workshop` document — or explicitly marked `unverified:`.
 - [ ] Every user-visible failure mode has defined behavior plus a criterion, or an explicit accepted-risk line.
+- [ ] On a UI feature: every surface declares its populated, empty, loading, and error states, and every user-visible failure mode from the error-handling table has a named UI treatment or an explicit not-handled line.
+- [ ] On a UI feature: every pattern choice cites the platform skill and the alternative it beat, reuse of the existing design system is cited by path, and the accessibility criteria carry numbers.
+- [ ] On a UI feature: nothing contradicts `feature-description.md`'s journey or emotional arc, and no Gherkin has leaked into this document.
 - [ ] Monitoring includes a rollout guardrail with a source and a threshold; metrics needing implementation are reflected in the technical notes.
 - [ ] Concepts are named consistently across artifacts and with `feature-description.md` and the domain glossary.
 - [ ] No artifact contradicts another, or contradicts current system behavior as documented by the integration tests.
@@ -167,11 +203,13 @@ Fix blockers and re-run only the failing items (max 2 iterations; then surface t
 
 **Hard stop: do not finalize until every item passes.**
 
-### 9. Persist and present for approval (hard stop)
+### 10. Persist and present for approval (hard stop)
 
 Write to the location the user has configured for specs at the user or project scope. If none is configured, write **alongside the product description** — `<TICKET>_<slug>/spec.md` in the same folder as `feature-description.md` — so the description, the spec, and the later plan sit together. With no upstream document, default to `<primary repo>/docs/specs/<TICKET>_<slug>/spec.md`.
 
 `<TICKET>` is the tracker id, taken from `--ticket`, from the invocation, or asked for once; when there genuinely is no ticket, use the slug alone. `<slug>` is the slugified feature name. Create the directory if missing. If the file already exists, ask before overwriting (headless: halt).
+
+When step 6 overflowed into a prototype file, `ui-prototype.md` goes in that same folder and the spec's header line points at it. It is part of the same approval — present it with the spec, never as a separate gate.
 
 ```markdown
 # Spec: <Feature Name>
@@ -182,6 +220,7 @@ Write to the location the user has configured for specs at the user or project s
 **Feature description**: `feature-description.md` (sibling in this directory) | none
 **Story map**: `story-map.md` — activity "<Activity>", rib "<Rib>" | none
 **Components affected**: <best current understanding>
+**UI prototype**: `ui-prototype.md` (sibling in this directory) | inline below | none — no user-facing surface
 
 ## Intent
 ...
@@ -200,6 +239,28 @@ Write to the location the user has configured for specs at the user or project s
 | Metric | What it answers | Source | Exists / needs implementation |
 |---|---|---|---|
 <!-- At least one row is the rollout guardrail, with its threshold. -->
+
+## UI/UX Specification
+<!-- Omit only when the feature changes no user-facing surface — then say exactly that.
+     Journey and emotional arc live upstream in feature-description.md; do not restate them. -->
+
+**Platform**: <web | CLI/TUI | both>
+**Design system reuse**: <path(s) to the components and screens this builds on>
+
+### Surfaces and states
+| Surface | Populated | Empty (first-run / zero-results) | Loading | Error |
+|---|---|---|---|---|
+
+### Pattern choices
+<!-- Pattern — why, per ux-web-patterns / ux-tui-patterns — what it beat (also in Rejected Alternatives). -->
+
+### Prototype
+<!-- ASCII wireframe / TUI mockup per surface, low fidelity. Two surfaces max inline;
+     beyond that, move to ui-prototype.md and reference it from the header. -->
+
+### Integration check
+<!-- Consistent vocabulary against the domain glossary; one source per repeated value;
+     no step relying on something the previous step did not show. -->
 
 ## Acceptance Criteria
 <!-- Observable, pass/fail, implementable as a test but not written as one. -->
@@ -229,10 +290,10 @@ Write to the location the user has configured for specs at the user or project s
      spike results. A reader must be able to re-check any claim. -->
 ```
 
-Print the file path, show the human the Intent, Acceptance Criteria, and Unresolved Ambiguities, and ask them to approve or request changes. **Only on explicit approval** set `**Status**: approved`.
+Print the file path, show the human the Intent, Acceptance Criteria, and Unresolved Ambiguities — plus the prototype whenever the feature has a surface, because a wireframe is the cheapest artifact in this pipeline to correct — and ask them to approve or request changes. **Only on explicit approval** set `**Status**: approved`.
 
 Then stop. Name `/plan` as the natural next step, but do not start it. (Headless: leave `**Status**: draft`, print the path, and halt.)
 
 ## Running this phase by hand (no skill)
 
-The artifact matters, not the automation. A human doing this manually: read the product description and the integration tests for the surface being changed; write the intent in a paragraph the stakeholder would recognise; prove the risky technical assumption with a throwaway spike instead of asserting it; list the ways it can fail and decide, for each, what the user sees; name the one metric that would make you roll it back; write the criteria as outcomes someone else could check; and take every question you cannot answer from the code to the person who owns the intent, before anyone plans the work. The discipline that carries the value is refusing to state a technical fact you have not verified, and refusing to resolve a product question by guessing.
+The artifact matters, not the automation. A human doing this manually: read the product description and the integration tests for the surface being changed; write the intent in a paragraph the stakeholder would recognise; prove the risky technical assumption with a throwaway spike instead of asserting it; list the ways it can fail and decide, for each, what the user sees; sketch the screen or the command output badly on purpose, with its empty and error states, and pick the pattern by naming what it beat; name the one metric that would make you roll it back; write the criteria as outcomes someone else could check; and take every question you cannot answer from the code to the person who owns the intent, before anyone plans the work. The discipline that carries the value is refusing to state a technical fact you have not verified, and refusing to resolve a product question by guessing.

@@ -31,10 +31,12 @@ description.md                               stacked PRs
 
 | Phase | Skill | Produces | Hard stop |
 |---|---|---|---|
-| 1. Product analysis | `/product-analysis` | `feature-description.md` — business goals with measured baselines, current behavior, use-case scenarios, scope boundaries, technical constraints | Consistency gate, then human approval |
-| 2. Specification | `/specs` | `spec.md` — intent, technical notes, error handling, monitoring, acceptance criteria, ambiguity log | Consistency gate, then human approval |
-| 3. Planning | `/plan` | `plan.md` — ordered checkbox tasks with acceptance criteria, files, tests and verification, grouped into a stack of reviewable PRs | Spec-conformance gate, then human approval |
+| 1. Product analysis | `/product-analysis` | `feature-description.md` — business goals with measured baselines, current behavior, use-case scenarios, scope boundaries, technical constraints, and on a UI feature the journey and its emotional arc | Consistency gate, then human approval |
+| 2. Specification | `/specs` | `spec.md` — intent, technical notes, error handling, monitoring, acceptance criteria, ambiguity log, and on a UI feature the surfaces, states, pattern choices and a low-fidelity prototype | Consistency gate, then human approval |
+| 3. Planning | `/plan` | `plan.md` — ordered checkbox tasks with acceptance criteria, files, tests and verification, grouped into a stack of reviewable PRs; Gherkin scenarios written against the approved surface | Spec-conformance gate, then human approval |
 | 4. Build | `/build` | One worktree per repo, one commit per task, one PR per stack entry | Halts whenever reality contradicts the spec or the plan |
+
+When a feature touches a user-facing surface, five **design and UX reference skills** carry the vocabulary through the pipeline — journey and emotional arc in phase 1, prototype and pattern choices in phase 2, scenario coverage in phase 3. They are model-loaded, not slash commands.
 
 Two rules hold across all four: **ambiguity is surfaced, never absorbed** — anything two reasonable people would decide differently goes to the human — and **evidence is never invented** — an unverified claim is written as `unverified:` with what would confirm it.
 
@@ -54,6 +56,18 @@ Each skill also documents how to run its phase by hand, without the skill.
 | [`test-mutation`](plugins/software-engineering-skills/skills/test-mutation/README.md) | Mutation testing patterns for checking whether tests actually catch bugs |
 | [`arm-workshop`](plugins/software-engineering-skills/skills/arm-workshop/README.md) | Collaborative technical investigation with agent teams — ARM methodology, risk storming, C4 container diagrams |
 | [`user-story-mapping-workshop`](plugins/software-engineering-skills/skills/user-story-mapping-workshop/README.md) | Story maps and outcome-based release slicing |
+
+### Design and UX reference skills
+
+Not user-invocable — the refining phases load them through the Skill tool when the feature touches a user-facing surface, and `/plan` loads the platform one for the coverage a UI scenario set owes.
+
+| Skill | Loaded by | What it carries |
+|---|---|---|
+| [`design-methodology`](plugins/software-engineering-skills/skills/design-methodology/README.md) | `/product-analysis` (journey + arc) · `/specs` (prototype + integration check) | Apple LeanUX++ workflow, journey schema, emotional arc patterns, clig.dev CLI principles |
+| [`ux-principles`](plugins/software-engineering-skills/skills/ux-principles/README.md) | both | Nielsen, Norman, Fitts/Hick/Miller, progressive disclosure, WCAG 2.2 AA minimums |
+| [`ux-emotional-patterns`](plugins/software-engineering-skills/skills/ux-emotional-patterns/README.md) | both | Walter's hierarchy, empty states, first-run onboarding, tone of voice, microinteractions |
+| [`ux-web-patterns`](plugins/software-engineering-skills/skills/ux-web-patterns/README.md) | `/specs` · `/plan`, by platform | Navigation, forms, data display, responsive, motion, design tokens, anti-patterns |
+| [`ux-tui-patterns`](plugins/software-engineering-skills/skills/ux-tui-patterns/README.md) | `/specs` · `/plan`, by platform | Arguments, TUI architectures, colour and output contracts, errors, help, progress |
 
 ### Agents
 

@@ -35,7 +35,7 @@ Nothing is optional — "none" is a valid value written out loud.
 | Test plan | Environment, preconditions, numbered steps, who runs it — or `none — covered by the tests above` |
 | Notes | Ordering, flag state, reversibility |
 
-**Product tasks additionally carry Gherkin scenarios** — written at the observable boundary, no framework, selector, or function name in the steps.
+**Product tasks additionally carry Gherkin scenarios** — written at the observable boundary, no framework, selector, or function name in the steps. On a **user-facing surface**, the set has a required shape: happy path, empty state (first-run and zero-results separately when the spec separates them), the error state per user-visible failure mode, and the keyboard-only path — or a Notes line citing where the spec marked the state not-handled.
 
 ### Engineer vs Product
 
@@ -52,6 +52,14 @@ The classification tells a reader what kind of proof to expect, and it is what s
 - **Follow the codebase's conventions**, citing the nearest analogous feature by path.
 - **The PR stack is stacked branches** — PR 2 off PR 1's head. Each PR is one theme, independently reviewable and verifiable, and safe to merge on its own. Keep it three or four deep at most; reviews land bottom-up, and reworking an early PR forces a restack of everything above it.
 - **Two hard stops:** the four-part quality gate (spec conformance, files and changes, contradictions, verifiability) run by an independent read-only subagent, and human approval.
+
+## UI features
+
+The spec's `## UI/UX Specification` — and `ui-prototype.md` when it has one — is a **hard input**, read in step 1 alongside the acceptance criteria. It makes "the observable boundary" concrete: scenarios are written against the labels, states and controls the approved prototype shows, and a task's Files table names the components because the prototype named them.
+
+For the *coverage* a UI scenario set owes, step 4 loads [`ux-web-patterns`](../ux-web-patterns/README.md) or [`ux-tui-patterns`](../ux-tui-patterns/README.md) and reads its acceptance-criteria template for the shape it implies — happy path, error state, empty state, keyboard accessibility. The template's Gherkin is never pasted, and it may not introduce a behavior the spec did not specify.
+
+Two quality-gate items exist to catch what leaks here: a surface the spec specified appearing in **no** task, and a component named in the prototype appearing in no Files table.
 
 ## Using the plan during implementation
 

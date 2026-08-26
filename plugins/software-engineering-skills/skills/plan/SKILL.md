@@ -52,6 +52,8 @@ Every task carries these fields, in this order. Nothing is optional; "none" is a
 
 A **Product task** additionally carries its **Gherkin scenarios** — the spec deliberately defers these to here. One scenario per behavior the task introduces, written at the observable boundary (what a user or a calling client can see), with no framework, selector, or function name in the steps. These are what the automated tests bind to; the acceptance criteria and the scenarios must agree.
 
+When the task changes a **user-facing surface**, its scenario set has a required shape, because the spec declared those states and they are the ones that get dropped: the happy path, the **empty state** (first-run and zero-results are separate scenarios when the spec separates them), the **error state** for each user-visible failure mode the task touches, and the **keyboard-only path**. A state the spec explicitly marked not-handled needs no scenario — say so in Notes rather than leaving the gap unexplained.
+
 ## Engineer tasks vs Product tasks
 
 The classification tells a reader what kind of proof to expect, and it is what stops product behavior from arriving hidden inside a refactor.
@@ -109,10 +111,11 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 
 ### 1. Load the spec and its lineage (hard input)
 
-- Read the spec end to end: intent, technical notes and their spikes, error handling, monitoring, acceptance criteria, assumptions, ambiguity log. The spec's acceptance criteria are the plan's contract.
+- Read the spec end to end: intent, technical notes and their spikes, error handling, monitoring, **UI/UX specification**, acceptance criteria, assumptions, ambiguity log. The spec's acceptance criteria are the plan's contract.
+- **On a UI feature, open the prototype.** The spec's `## UI/UX Specification` — plus `ui-prototype.md` when the spec's header points at one — carries the surfaces and their states, the pattern choices, and the low-fidelity mockups. It is the boundary the scenarios are written at and the reason a task's Files table names the components it does; read it before step 2, not after the tasks are drafted.
 - **`## Unresolved Ambiguities` is a gate.** Any entry that would change the shape of the work goes to the human before you plan. Interactive: ask. Headless: halt.
 - If there is no spec, do not improvise one — offer `/specs` and stop. (For a change small and obvious enough that a spec is overkill, say so and ask the human to confirm before planning without one.)
-- Read the upstream documents the spec cites (`feature-description.md`, `story-map.md`, any `/arm-workshop` output) for the boundary and the target metric. Do not contradict them.
+- Read the upstream documents the spec cites (`feature-description.md`, `story-map.md`, any `/arm-workshop` output) for the boundary and the target metric — and, on a UI feature, for the journey and its emotional arc, which say which steps the work must not degrade. Do not contradict them.
 - Check memory for prior context on this area: `~/.claude/projects/<project-slug>/memory/`, starting from `MEMORY.md`.
 
 ### 2. Ground the plan in the codebase
@@ -138,6 +141,8 @@ Sketch the sequence before writing tasks. The order is the plan's real design de
 ### 4. Write the tasks
 
 One task per behavior or enabler, in execution order, each with the full anatomy above and a checkbox in its PR's checklist. Authoring the Gherkin scenarios for each Product task is part of this step — from the spec's acceptance criteria, one scenario per behavior, at the observable boundary.
+
+On a UI feature the prototype is what makes "the observable boundary" concrete — write the steps against the labels, states, and controls it shows, so a scenario cannot drift from the surface that was approved. For the coverage a UI scenario set owes, load the platform skill through the Skill tool (`ux-web-patterns` or `ux-tui-patterns`) and read its acceptance-criteria template: take the **shape** it implies — happy path, error state, empty state, keyboard accessibility — and write your own scenarios from the spec. Do not paste the template's Gherkin, and do not let it introduce a behavior the spec never specified.
 
 Re-read each task asking a single question: *could a competent engineer who has not read this conversation execute it, and could a second person confirm it is done?* If not, the task is not finished being written.
 
@@ -179,6 +184,8 @@ Hand the drafted plan, the spec, and repository access to an independent read-on
 - [ ] Every task has 1–3 acceptance criteria, each observable with a pass/fail condition.
 - [ ] Every criterion has a verification a second person could run, with an expected result — no "works correctly", no unnamed test suite.
 - [ ] Every Product task names automated tests at a level the repo actually uses, and its Gherkin scenarios agree with its acceptance criteria.
+- [ ] On a UI feature: every surface and state in the spec's UI/UX specification is claimed by some task's acceptance criteria, or is listed under `## Deferred` — a spec'd surface that appears in no task is the failure this item exists to catch.
+- [ ] On a UI feature: every component and path named in the prototype appears in some task's Files table as existing or `new:`, and every Product task touching a surface has its empty-state, error-state, and keyboard scenarios, or a Notes line citing where the spec marked the state not-handled.
 - [ ] Nothing rests on manual testing that automation could cover; every genuinely manual check names environment, data, and steps.
 
 Fix blockers and re-run only the failing items (max 2 iterations; then surface the outstanding blockers to the human and ask how to proceed). Record the verdicts in the plan.
