@@ -6,7 +6,9 @@ Takes one open pull request and drives it to the point where a human's time is w
 
 > Every CI check on the PR's head is green, **and** every automated review finding is applied or answered, **and** every changes-requested review is addressed or justified.
 
-That is the agent's success condition, and the goal it runs under with the `/goal` skill. It reports `ready` when it is met, `blocked` when a human must decide, and stays quiet in between.
+That is the agent's success condition, and it runs its loop under the built-in `/loop` skill in dynamic mode, self-pacing its wakeups. It reports `ready` when the condition is met, `blocked` when a human must decide, and stays quiet in between.
+
+It stops there on purpose: it **never merges and never approves**. Taking a PR the rest of the way — waiting for the review, settling what it asks for, and merging — is [`/monitor-pr`](../../skills/monitor-pr/README.md), which dispatches this agent for the repairs and keeps the merge decision for itself.
 
 ## The decision matrix
 

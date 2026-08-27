@@ -123,6 +123,26 @@ Deliberately small, and strict about evidence: every check result and verificati
 /open-pr <branch> [--base <branch>] [--draft] [--repo <path>] [--plan <plan.md>]
 ```
 
+### `/monitor-pr`
+
+*[Skill README →](skills/monitor-pr/README.md)*
+
+Takes **one** open PR the rest of the way — to **merged**. Where `/open-pr` opens and stops, and `pr-monitor` reaches *ready for human review* and stops, this skill waits for the review, settles what it asks for, and merges.
+
+**Mergeable has an exact definition:** every CI check on the PR's current head is green, **and** an approving code review stands on that same head, **and** every review finding is implemented or answered, **and** GitHub reports no conflicts. All four, on the same commit, at the same moment.
+
+The review **always comes** — even when it is one word saying *approved* — so an absent review is never a reason to merge, only a reason to keep waiting. Every finding gets one of two responses: implemented, or answered with evidence (`path:line`, the guard that exists, the test that covers it). If that justification cannot be written convincingly, the finding was right.
+
+Its gate is stricter than GitHub's. An approving review counts **only if it was submitted against the current head SHA**, checked via `commit.oid` rather than the `reviewDecision` field — which stays `APPROVED` across new pushes unless the repo enables dismiss-stale-reviews. Push a fix after an approval and the gate shuts again.
+
+It dispatches a [`pr-monitor`](agents/pr-monitor/README.md) for the repairs and keeps the merge decision for itself: the thing that fixes the code is deliberately not the thing that decides the code is good enough to ship. It never approves its own PR, never disables a test to get green, and never merges with `--admin` or past a protection rule — a refusal from GitHub is a halt, not a retry.
+
+The wait runs under the built-in `/loop` skill in dynamic mode, self-paced. Nothing moving for three checks earns one `waiting` report naming who owes what; two hours earns `blocked`.
+
+```
+/monitor-pr <owner/repo> <pr-number> [--merge-method squash|merge|rebase] [--repo-path <path>]
+```
+
 ### `test-mutation`
 
 *[Skill README →](skills/test-mutation/README.md)*
@@ -174,7 +194,7 @@ Each agent directory carries its own README with purpose, boundaries, and input/
 | Agent | Model | Summary |
 |---|---|---|
 | [`tdd-developer`](agents/tdd-developer/README.md) | sonnet | Implements one planned task at a time inside an assigned worktree, test first, exactly one commit per task. Never creates branches, pushes, or opens PRs — it reports `blocked` when the plan and the codebase disagree. |
-| [`pr-monitor`](agents/pr-monitor/README.md) | sonnet | Takes one open PR to *ready for human review*: every check green, every automated finding applied or answered, every changes-requested review addressed or justified. Never merges, approves, or disables a test to get green. |
+| [`pr-monitor`](agents/pr-monitor/README.md) | sonnet | Takes one open PR to *ready for human review*: every check green, every automated finding applied or answered, every changes-requested review addressed or justified. Never merges, approves, or disables a test to get green — merging is [`/monitor-pr`](skills/monitor-pr/README.md), which dispatches this agent for the repairs. |
 
 ### Judging and review
 

@@ -11,15 +11,17 @@ You take one open pull request and drive it to **ready for human review**. That 
 
 Nothing else counts as done. A PR that is red, or carries an unanswered bot finding, wastes the time of the person you are handing it to.
 
-## Drive it with `/goal`
+## Drive it with `/loop`
 
-Run under the **`/goal` skill**, with the goal set to *this pull request is ready for human review*, and the definition above as its success condition. Let it own the loop — the re-checks, the "is it there yet", the stopping.
+Run under the built-in **`/loop` skill in dynamic mode** — invoked with **no interval**, so you pace your own wakeups — with the definition above as the condition that ends the loop. Let it own the re-checks, the "is it there yet", and the stopping.
 
-If `/goal` is not available in this environment, say so in your first report and drive the loop yourself instead: act on each event, re-check the PR's full state (head SHA, every check, every open thread) after each push, and keep going until the definition is met or you are blocked. Never poll with `sleep`; wait on PR events where the harness delivers them, and otherwise re-check on a schedule.
+Pace by what you are waiting on: roughly a CI run's own duration while a run is in flight, longer while nothing is moving. Never poll with `sleep`, and never schedule a short wakeup to watch work the harness will notify you about anyway.
+
+If `/loop` is not available in this environment, say so in your first report and drive the loop yourself on the same cadence: act on each event, re-check the PR's full state (head SHA, every check, every open thread) after each push, and keep going until the definition is met or you are blocked.
 
 ## CRITICAL: what you never do
 
-- **Never merge and never approve.** Not even with a green PR and a passing review. You hand it to a human; they decide.
+- **Never merge and never approve.** Not even with a green PR and a passing review. You hand it upward; someone else decides. When `/monitor-pr` dispatched you, it owns the approval gate and the merge — reaching for either is still off limits.
 - **Never skip, disable, quarantine, or delete a test** to turn a check green. That is the one failure that makes everything else you did worthless.
 - **Never rewrite history on the branch** — no rebase, amend, or force-push on a PR you did not create. A merge commit keeps everyone's checkout valid.
 - **Never work in a worktree an implementer is using.** Where the build keeps one worktree per PR branch, yours is the one for this PR's branch and the implementer has moved on to the next — use it. Where it does not, get your own: `git worktree add --detach <path> <branch>` or a separate clone. Never share a directory with a working implementer.
