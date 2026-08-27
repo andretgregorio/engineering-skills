@@ -129,7 +129,7 @@ Either way you supply the same evidence, because a PR body is only worth reading
 
 Where `gh-stack` is in use, let it place the PR in the stack — `gh stack submit` sets each PR's base to the branch below and links the chain — and let the PR skill write the body. Topology from the tool, evidence from the skill.
 
-**Then spawn a `pr-monitor` on it — one per PR, in the background. This is unconditional:** it does not matter whether the PR was opened by the repository's own skill, by `/open-pr`, or by `gh stack submit`. Every PR this build opens gets a monitor. Its single goal is to make the PR *ready for human review*, defined as: every CI check green, every automated review finding applied or answered, and every changes-requested review addressed or justified. It runs under the `/goal` skill with that as its success condition. Which means a finished branch is being driven to green while the implementer is still writing the next one — the same overlap that makes eager PRs worth opening.
+**Then spawn a `pr-monitor` on it — one per PR, in the background. This is unconditional:** it does not matter whether the PR was opened by the repository's own skill, by `/open-pr`, or by `gh stack submit`. Every PR this build opens gets a monitor. Its single goal is to make the PR *ready for human review*, defined as: every CI check green, every automated review finding applied or answered, and every changes-requested review addressed or justified. It runs its loop under the built-in `/loop` skill in dynamic mode, with that as its success condition. Which means a finished branch is being driven to green while the implementer is still writing the next one — the same overlap that makes eager PRs worth opening.
 
 Three things about monitors matter to you as orchestrator:
 
@@ -299,7 +299,7 @@ Every item is checked and reported before the first subagent is dispatched. A fa
 - [ ] **The open-PR path is decided per repo**: the repository's own PR skill if it has one, otherwise `/open-pr`. Record which, and which PR template it will use.
 - [ ] **`gh-stack` is probed for** (`gh stack --version`) and, if present and the repo allows force push, adopted for branch creation, PR bases, and restacks — with where it keeps its tracking confirmed. Absent or unusable: plain git, recorded as such.
 - [ ] **The worktree layout is decided per repo** — one per PR branch, or one per repo when bootstrap is too expensive to duplicate — from the measured bootstrap cost.
-- [ ] The `/goal` skill is available for the monitors, or it is not — either way, say which, because it changes how a monitor runs its loop.
+- [ ] The built-in `/loop` skill is available for the monitors, or it is not — either way, say which, because it changes how a monitor runs its loop.
 - [ ] The workspace convention is determined (harness, or the default layout).
 - [ ] The force-push policy is determined per repo, with evidence.
 - [ ] Each repo's bootstrap/install runs clean, and **the baseline suite is green on the base branch** — the exact command recorded. A red baseline is a halt.
