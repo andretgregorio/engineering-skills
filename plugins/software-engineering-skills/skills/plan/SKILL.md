@@ -127,7 +127,7 @@ This is most of the work, and it is what makes the plan worth reading. The spec 
 - Read the tests covering the surface you touch. They tell you the current behavior, the test level the house uses, and where your new tests belong.
 - Locate the seams: what is already injectable, what is hard-wired, what needs an Engineer task to open.
 - Note the repo's own rules (`CLAUDE.md`, `.claude/rules/`, contributing docs) that constrain how the change may be written.
-- Where you are still guessing after reading — a library behaves a certain way, a query performs well enough, a migration is safe on production volumes — **spike it** in a scratch branch or worktree, record `Spike: <question> → <result> (<where it ran>)`, and throw the code away. If a claim stays unverified, write it as `unverified:` and treat it as a risk, not a fact.
+- Where you are still guessing after reading — a library behaves a certain way, a query performs well enough, a migration is safe on production volumes — **spike it** in a scratch branch or worktree, record `Spike: <question> → <result> (<where it ran>)`, and throw the code away. When the question is bigger than an hour, crosses repositories, or decides whether the task is possible at all, run `/spike-investigation` and cite its report by path. If a claim stays unverified, write it as `unverified:` and treat it as a risk, not a fact.
 
 ### 3. Decide the build order
 

@@ -38,7 +38,7 @@ Not for: the implementation plan (that is `/plan`), test implementations, commit
 ## The rules that carry the value
 
 - **One vertical slice at a time.** Step 2 is a hard stop. With a story map, a spec resolves exactly **one rib** — one task under one backbone activity. Without one, signals like "spans more than one user activity", "parts would ship separately", or "its name joins two capabilities with *and*" mean the request holds more than one functionality: stop and propose `/user-story-mapping-workshop`.
-- **Verified, not assumed.** Never state that a library, API, query, or framework behaves a certain way from memory. The spike protocol — timeboxed to about an hour, in a scratch branch, result recorded, code thrown away — is how a technical note earns its place.
+- **Verified, not assumed.** Never state that a library, API, query, or framework behaves a certain way from memory. The spike protocol — timeboxed to about an hour, in a scratch branch, result recorded, code thrown away — is how a technical note earns its place. Bigger than that, or crossing repositories, and it is [`/spike-investigation`](../spike-investigation/README.md), cited here by path.
 - **Escalate genuinely architectural questions.** If the notes require weighing different designs, or the risks are architectural rather than local, stop and propose `/arm-workshop`; its document then becomes the source, cited by path.
 - **Error handling from real signal** — open Sentry issues, Datadog error rates, the timeout behavior of your dependencies — not from imagination. Every user-visible failure gets a criterion or an explicit accepted-risk line. Silence is not a decision.
 - **At least one monitoring row is the rollout guardrail**, with its threshold and who watches it.

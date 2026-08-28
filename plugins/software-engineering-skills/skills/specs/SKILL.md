@@ -109,6 +109,8 @@ Structured notes, not prose: components touched, interfaces and contracts, depen
 3. Throw the code away. A spike's value is the answer, not the diff — nothing it produced is committed as source code.
 4. If the box runs out, write the claim as `unverified:` with what would confirm it, and let step 7 decide whether it blocks.
 
+**When the question is bigger than an hour, or crosses more than one repository, run `/spike-investigation` instead** — it holds the timebox, spikes every repository involved, proves the behavior against the running application, and produces a spike report. Cite that report by path here rather than restating it, and carry its risks into step 5 and its surviving unknowns into step 7.
+
 **Escalate instead of guessing.** If the notes require weighing genuinely different designs, or the risks are architectural rather than local, stop and propose `/arm-workshop`. Its technical-investigation document then becomes this section's source, cited by path — do not re-litigate it here.
 
 Out of scope for this section: task ordering, file-by-file diffs, and anything that reads as an implementation plan.

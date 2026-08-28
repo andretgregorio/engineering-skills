@@ -52,6 +52,7 @@ Each skill also documents how to run its phase by hand, without the skill.
 | [`specs`](plugins/software-engineering-skills/skills/specs/README.md) | Specification artifacts for one feature, with ambiguity resolved against a human |
 | [`plan`](plugins/software-engineering-skills/skills/plan/README.md) | Turns an approved spec into an ordered task list and a proposed PR stack |
 | [`build`](plugins/software-engineering-skills/skills/build/README.md) | Executes an approved plan — worktrees, TDD subagents, yellow-phase review gate, conformance judge, stacked PRs |
+| [`spike-investigation`](plugins/software-engineering-skills/skills/spike-investigation/README.md) | Answers one falsifiable "can we build this here" question by hacking the throwaway version and proving it against the real running app — timeboxed, every repo involved, code discarded, report kept |
 | [`open-pr`](plugins/software-engineering-skills/skills/open-pr/README.md) | Opens one PR for a finished branch, filling the repo's own template. Loses to a repo's own open-PR skill |
 | [`test-mutation`](plugins/software-engineering-skills/skills/test-mutation/README.md) | Mutation testing patterns for checking whether tests actually catch bugs |
 | [`arm-workshop`](plugins/software-engineering-skills/skills/arm-workshop/README.md) | Collaborative technical investigation with agent teams — ARM methodology, risk storming, C4 container diagrams |
@@ -75,6 +76,7 @@ Not user-invocable — the refining phases load them through the Skill tool when
 |---|---|
 | [`tdd-developer`](plugins/software-engineering-skills/agents/tdd-developer/README.md) | Implements one planned task at a time, test-first, one commit per task |
 | [`plan-conformance-judge`](plugins/software-engineering-skills/agents/plan-conformance-judge/README.md) | Read-only judge: is this branch what the plan said it would be? |
+| [`spike-conformance-judge`](plugins/software-engineering-skills/agents/spike-conformance-judge/README.md) | Read-only judge: did the spike answer the question that was actually asked, and prove it? Re-runs the probe before the worktrees are destroyed |
 | [`pr-monitor`](plugins/software-engineering-skills/agents/pr-monitor/README.md) | Drives one open PR to green CI and answered bot findings |
 | [`clean-coder-reviewer`](plugins/software-engineering-skills/agents/clean-coder-reviewer/README.md) | Clean Code / SOLID review, with pragmatic trade-offs |
 | [`code-smell-detector`](plugins/software-engineering-skills/agents/code-smell-detector/README.md) | Detects code smells across 10 categories and 50+ smells |
