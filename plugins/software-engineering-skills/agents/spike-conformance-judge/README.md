@@ -14,18 +14,19 @@ A spike's outcome is a claim written by the agent that spent two hours wanting i
 
 Its strongest check is reproduction, and that only exists while the worktrees do. Judging after the environment is torn down reduces every reproduction verdict to `unverifiable` — and it removes the chance to repair a gap cheaply, while the spike is still standing.
 
-## The eight dimensions
+## The nine dimensions
 
 | # | Dimension | The failure it catches |
 |---|---|---|
 | 1 | Goal fidelity | The constraint in the user's own words was dropped, narrowed, or reinterpreted; the behavior proven is adjacent to the one asked about |
 | 2 | Something actually ran | No baseline run, or a baseline that failed because the app was down rather than because the behavior was absent |
-| 3 | The probe observes the system | The probe asserts on a value the spike itself hardcoded, or would pass with the spike's core change reverted |
-| 4 | Reproduction | The judge re-ran the probe and got something else — an unreproducible proof is not a proof |
-| 5 | Repository coverage | One side proven, the other assumed, without the outcome being called `inconclusive` |
-| 6 | Outcome honesty | Caveats buried in prose under a `proven` header; `inconclusive` dressed up as `proven with caveats`; a faked seam missing from *what this spike did not prove* |
-| 7 | Decision usefulness | An effort estimate asserted rather than derived from the diff; generic risks; unknowns with no resolution named |
-| 8 | Containment | Something pushed, a shared resource mutated, a secret in the report or the patch |
+| 3 | The criteria could have failed | An expected value fitted to the output rather than derived from the requirement — the "correct" order is also insertion order, the "filtered" set is every row; a criterion green on the baseline read as "already works"; an action that was a no-op from the state it started in; combinations the request implies that no criterion covers |
+| 4 | The probe observes the system | The probe asserts on a value the spike itself hardcoded, or would pass with the spike's core change reverted |
+| 5 | Reproduction | The judge re-ran the probe and got something else — an unreproducible proof is not a proof |
+| 6 | Repository coverage | One side proven, the other assumed, without the outcome being called `inconclusive` |
+| 7 | Outcome honesty | Caveats buried in prose under a `proven` header; `inconclusive` dressed up as `proven with caveats`; a faked seam missing from *what this spike did not prove* |
+| 8 | Decision usefulness | An effort estimate asserted rather than derived from the diff; generic risks; unknowns with no resolution named |
+| 9 | Containment | Something pushed, a shared resource mutated, a secret in the report or the patch |
 
 Verdicts are `meets` / `falls short` / `unverifiable` per dimension, overall the worst of them. When a dimension is arguably met and arguably not, it returns `falls short`: **a false pass is the expensive error**, because it sends someone to plan and estimate a feature on a proof that was never real.
 
@@ -38,9 +39,9 @@ Verdicts are `meets` / `falls short` / `unverifiable` per dimension, overall the
 
 ## Input and output
 
-**In** — the user's original request *verbatim*, the framed question, the report, the probe script, the captured runs, the diff per repo, and the still-intact worktrees.
+**In** — the user's original request *verbatim*, the framed question, the acceptance criteria as agreed before any code, the report, the probe script, the captured runs, the diff per repo, and the still-intact worktrees.
 
-**Out** — the reported outcome against the outcome the evidence supports, a verdict per dimension with quoted expectation and re-checkable evidence, the reproduction result, per-repository coverage, every over-claiming sentence quoted, a containment check, and an explicit list of what it could not check.
+**Out** — the reported outcome against the outcome the evidence supports, a verdict per dimension with quoted expectation and re-checkable evidence, the criteria tally (green and discriminating / unproven / missing), the reproduction result, per-repository coverage, every over-claiming sentence quoted, a containment check, and an explicit list of what it could not check.
 
 ## Beyond /spike-investigation
 
