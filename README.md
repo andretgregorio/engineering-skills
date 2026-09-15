@@ -52,6 +52,7 @@ Each skill also documents how to run its phase by hand, without the skill.
 | [`specs`](plugins/software-engineering-skills/skills/specs/README.md) | Specification artifacts for one feature, with ambiguity resolved against a human |
 | [`plan`](plugins/software-engineering-skills/skills/plan/README.md) | Turns an approved spec into an ordered task list and a proposed PR stack |
 | [`build`](plugins/software-engineering-skills/skills/build/README.md) | Executes an approved plan — worktrees, TDD subagents, yellow-phase review gate, conformance judge, stacked PRs |
+| [`implementation-loop`](plugins/software-engineering-skills/skills/implementation-loop/README.md) | Turns an approved plan with a PR ordering into a queue that scheduled agents build one task at a time — a fresh worktree per code task, and a Human review block that stops the queue until a conflict is answered |
 | [`spike-investigation`](plugins/software-engineering-skills/skills/spike-investigation/README.md) | Answers one falsifiable "can we build this here" question by hacking the throwaway version and proving it against the real running app — timeboxed, every repo involved, code discarded, report kept |
 | [`open-pr`](plugins/software-engineering-skills/skills/open-pr/README.md) | Opens one PR for a finished branch, filling the repo's own template. Loses to a repo's own open-PR skill |
 | [`test-mutation`](plugins/software-engineering-skills/skills/test-mutation/README.md) | Mutation testing patterns for checking whether tests actually catch bugs |

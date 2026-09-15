@@ -111,6 +111,22 @@ Every workflow skill accepts `--headless` (and infers it when there is provably 
 
 ## Standalone skills
 
+### `/implementation-loop`
+
+*[Skill README →](skills/implementation-loop/README.md)*
+
+Turns **one approved plan that orders its PRs** into a queue that builds itself — the unattended alternative to running `/build` in one live session. It writes a single markdown queue file, gets the human's approval, schedules a recurring tick, and stops; every tick starts a fresh agent that claims the one `READY` row, does it, and readies the next.
+
+- **Per PR, SPEC → PLAN → CODE** through `/specs`, `/plan` and `/build` — or **CODE-only** when the source is already an approved `/plan` with buildable tasks.
+- **Serial by construction**: at most one row is ever `READY`, a directory lock guards each board edit, and a row stalled past the reclaim window is continued from its partial output, never restarted.
+- **Every CODE task creates its own worktree** from the remote tip of its base and keeps it as that PR's home. Worktrees are never reused — a shared one accumulates uncommitted state nobody owns, which the next agent either ships unknowingly or stops the queue over.
+- **Two channels to the human.** A question that can proceed on a stated assumption is a row in *Decisions awaiting the human* and the queue keeps moving. A conflict that makes the work wrong either way is a **Human review** block — context, the conflict with evidence, options with one recommended, what was left in place, and an empty space for the answer — and the queue stops. The human writes the answer and flips the block to `ANSWERED`; the next tick resumes the task from there.
+- **Nothing outward-facing beyond the standing authorization** the human approved: the named branches pushed, the named PRs opened. Never a merge.
+
+```
+/implementation-loop [--plan-file <path>] [--ticket <ID>] [--cadence <minutes>] [--stages spec,plan,code|code] [--no-schedule] [--headless]
+```
+
 ### `/spike-investigation`
 
 *[Skill README →](skills/spike-investigation/README.md)*
