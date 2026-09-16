@@ -111,6 +111,37 @@ Every workflow skill accepts `--headless` (and infers it when there is provably 
 
 ## Standalone skills
 
+### `/loop`
+
+*[Skill README →](skills/loop/README.md)*
+
+One decision: **which loop runs this document**, then it hands over and stops. A design document, story map or release plan whose delivery is sliced goes to `/delivery-loop`; an approved plan that orders its PRs goes to `/implementation-loop`.
+
+It classifies from the document's **content**, never its filename — `plan.md` is routinely a design doc — and names the signals that decided it. A spec with nothing downstream, an unsliced design doc, or a plan still marked `draft` is not routed at all: each has a named next step, and routing a document that is not ready is how a queue spends its first night guessing. Two plausible readings is one question to the human, never a coin flip.
+
+Not to be confused with the **built-in** `/loop`, which runs a prompt on a recurring interval. This one takes a document; an invocation starting with an interval or a slash command is handed back to the built-in.
+
+```
+/loop [<path to a design doc, story map or plan>] [--ticket <ID>] [<flags passed through>]
+```
+
+### `/delivery-loop`
+
+*[Skill README →](skills/delivery-loop/README.md)*
+
+Turns **a sliced delivery** — a design document, story map or release plan — into a queue that specifies, plans and builds itself. Where `/implementation-loop` starts from a finished plan, this starts one phase earlier and schedules one level finer: per unit, a spec through `/specs`, a plan through `/plan`, then **one row per task in that plan**, each built as exactly one commit through `/build`, then one row per pull request.
+
+- **Three levels, one document boundary.** A **slice** is a releasable increment from the source's slicing; a **unit** is one rib or sliced item — the smallest thing `/specs` accepts, and therefore one spec and one plan; a **task** is one plan task and one commit. The slice → unit split is confirmed with the human before anything is written.
+- **The board grows itself.** Task rows cannot exist before the plan that decides them, and a guessed row would disagree with the plan the builder actually reads — so each PLAN row appends its own successors, keeping the plan's task IDs, in the same locked edit that completes it. One row per plan task, nothing merged, nothing split.
+- **One worktree per PR branch**, shared by that branch's task rows in succession, with the cost of sharing bought back by a precondition: **a clean tree at exactly the SHA the ledger records**, or it is a Human review — never a `checkout`, `stash` or `reset` past someone's work.
+- **The stack shortens when the human merges.** Each branch's cut-from is resolved when its worktree is created: a unit's first PR comes off `<base branch>` if the earlier units are merged, otherwise off the last branch in the ledger, with the evidence recorded.
+- **The open-PR cap is part of the authorization** (default 4). The task row that would exceed it stops and asks — a delivery loop that outruns its reviewer is not delivering anything.
+- **Releases stay human.** A Release plan carries each slice's outcome, flag, guardrail metric and release gate; agents mark a slice `delivered — awaiting the human` and never clear a gate.
+
+```
+/delivery-loop [--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,task|plan,task] [--max-open-prs <n>] [--no-schedule] [--headless]
+```
+
 ### `/implementation-loop`
 
 *[Skill README →](skills/implementation-loop/README.md)*
