@@ -14,7 +14,7 @@ There are two, and the difference between them is how much of the pipeline still
 
 | | Source | What it schedules | Skill |
 |---|---|---|---|
-| **Delivery loop** | A design document, story map or release plan whose delivery is **sliced** | Per unit: SPEC → PLAN → one row per planned task → one row per PR. The board grows as plans are written | `software-engineering-skills:delivery-loop` |
+| **Delivery loop** | A design document, story map or release plan whose delivery is **sliced** | Per unit: SPEC → PLAN → one row per planned PR, each building that PR's tasks and opening it. The board grows as plans are written | `software-engineering-skills:delivery-loop` |
 | **Implementation loop** | An **approved plan** that orders its PRs | Per PR: SPEC → PLAN → CODE, or CODE-only when the plan is already buildable | `software-engineering-skills:implementation-loop` |
 
 Both write a queue file, take the human's approval, schedule a recurring tick, and stop. Choosing between them is this skill's whole job, and getting it wrong is expensive: the wrong loop either re-specifies work that was already planned, or builds a sliced delivery from guesses.

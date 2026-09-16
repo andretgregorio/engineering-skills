@@ -3,14 +3,14 @@
 Turns **a design document or story map whose delivery is already sliced** into a queue that specifies, plans and builds itself: a markdown file that scheduled agents claim tasks from, one at a time, until every slice's PRs are open.
 
 ```
-/delivery-loop [--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,task|plan,task] [--max-open-prs <n>] [--no-schedule] [--headless]
+/delivery-loop [--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,code|plan,code] [--max-open-prs <n>] [--no-schedule] [--headless]
 ```
 
 ## Purpose
 
-`/implementation-loop` starts from an approved plan and schedules its PRs. This skill starts **one phase earlier and finishes one level finer**: it starts before any spec exists, and it schedules the individual tasks each plan produces, not whole PRs.
+`/implementation-loop` starts from an approved plan and schedules its PRs. This skill starts **one phase earlier**: before any spec exists, writing the specs and the plans too.
 
-Given a sliced delivery, it writes one queue in which every unit of work gets its spec written (`software-engineering-skills:specs`), then its plan (`software-engineering-skills:plan`), then one row per task in that plan — each built as exactly one commit through `software-engineering-skills:build` — and then one row per pull request.
+Given a sliced delivery, it writes one queue in which every unit of work gets its spec written (`software-engineering-skills:specs`), then its plan (`software-engineering-skills:plan`), then **one row per pull request that plan proposes** — one agent, one session, building every task of that PR as its own commit through `software-engineering-skills:build` and opening the PR at the end of it.
 
 It writes the queue, gets the human's approval, schedules the recurring tick, and stops. It never claims a task itself.
 
@@ -18,9 +18,9 @@ It writes the queue, gets the human's approval, schedules the recurring tick, an
 |---|---|---|
 | Input | Design doc / story map with release slices | An approved plan that orders its PRs |
 | Writes specs and plans | Yes — one per unit | Optionally, per PR |
-| Scheduled unit of work | **One plan task** = one commit | One PR = one `/build` run |
+| Scheduled unit of work | **One PR** = every task of it, one commit each, then opened | One PR = one `/build` run |
 | Board | **Grows** as plans are written | Known in full up front |
-| Worktree | One per **PR branch** | One per **code task** |
+| Worktree | One per **PR branch** | One per **PR branch** |
 
 Not sure which one you want? `software-engineering-skills:loop` reads the document and routes.
 
@@ -30,7 +30,7 @@ Not sure which one you want? `software-engineering-skills:loop` reads the docume
 |---|---|---|
 | **Slice** `S1` | The source's release slicing | A releasable increment with an outcome and a guardrail metric |
 | **Unit** `S1.U2` | One rib / one sliced item | One spec, one plan — the smallest thing `/specs` accepts |
-| **Task** `S1.U2 · E1` | The unit's plan | One commit — written by the plan, not guessed by the queue |
+| **PR** `S1.U2 · PR1` | The unit's plan | One pull request — every task it holds, one commit each, opened at the end. Written by the plan, not guessed by the queue |
 
 Deriving units from slices is the one structural decision the source does not make for you, and it is confirmed with the human before the queue is written.
 
@@ -41,13 +41,19 @@ tick (every 30 min) → read the queue → claim the one READY row → do it →
                                     ↘ nothing claimable → exit silently (most ticks)
 ```
 
-A queue cannot list its task rows in advance: the tasks do not exist until the plan is written, and a guessed row would disagree with the plan the builder actually reads. So a **PLAN row appends its own successors** — one row per plan task keeping the plan's own IDs, one row per plan PR, plus a stack-ledger line each — in the same locked edit that marks itself `DONE`.
+A queue cannot list its build rows in advance: the pull requests do not exist until the plan is written, and a guessed row would disagree with the plan the builder actually reads. So a **PLAN row appends its own successors** — one row per plan PR, each listing that PR's plan task IDs, plus a stack-ledger line each — in the same locked edit that marks itself `DONE`.
 
-One row per plan task and nothing else: no merging two small tasks, no splitting a large one. A unit that expands past 15 tasks or 4 PRs is expanded anyway and logged as a slicing problem, not a build problem.
+One row per plan PR and nothing else: no splitting a PR across rows, no merging two PRs, no dropping a task from a PR's list. A unit that expands past 15 plan tasks or 4 PRs — or a single PR past 8 tasks — is expanded anyway and logged as a slicing problem, not a build problem.
 
-## One worktree per PR branch, with a precondition
+## A pull request is one sitting
 
-Several task rows build one branch in succession, so they share its worktree — paying a bootstrap per commit would be absurd. What a shared checkout normally costs, state nobody owns, is bought back by the ledger: **every row entering a worktree requires a clean tree at exactly the SHA the ledger records.** A dirty tree, an unexpected HEAD, or a path the ledger does not know is a Human review — never a `git checkout`, `stash`, `reset` or `rm -rf`.
+**The unit of scheduling is the PR, because that is the unit of review.** One agent creates the branch's worktree, builds every task in its list — one commit each, verified as it goes — runs the branch checks and the conformance judge, pushes, and opens the PR. It does not stop at a green branch: a row that has not opened its PR is not done.
+
+Splitting those tasks across rows put a cold agent and a worktree handover between commits that only make sense together, and left a branch half-built between ticks — for no gain, since the queue is serial anyway.
+
+## One worktree per PR branch
+
+The CODE row creates it and leaves it as that PR's home; no worktree is ever handed from one row to another, so there is no mid-branch state for anyone else to trip over. A path or branch already sitting where a row's must go, and not recorded in the ledger as that row's, is a Human review — never a `git checkout`, `stash`, `reset` or `rm -rf`.
 
 Specs and plans keep no checkout; they read at a ref. Monitors get their own throwaway worktree.
 
@@ -58,7 +64,7 @@ The queue never merges, so each branch is cut from something the queue produced 
 - Later PR in a unit → `origin/<previous branch>`.
 - A unit's first PR → `origin/<base branch>` if every earlier unit's PRs are merged, else `origin/<last branch in the ledger>`. The resolved answer and its evidence go in the ledger.
 
-**The open-PR cap (default 4) is part of the authorization.** A task row whose PR would exceed it does not start — it raises a Human review: merge the bottom of the stack, raise the cap, or pause. A delivery loop that outruns its reviewer is not delivering anything.
+**The open-PR cap (default 4) is part of the authorization.** A CODE row whose PR would exceed it does not start — it raises a Human review: merge the bottom of the stack, raise the cap, or pause. A delivery loop that outruns its reviewer is not delivering anything.
 
 ## Releases are the human's
 
@@ -88,7 +94,7 @@ The tick runs unattended, so it needs a permission mode that lets it edit, run g
 
 ## What it produces
 
-- `delivery-queue-<slug>.md` beside the source, from [`references/queue-template.md`](references/queue-template.md): metadata, reading order, standing authorization, claim protocol including the expansion step, the board, per-kind task instructions, worktree rules, stack ledger, release plan, unit briefs, merge gates, Human review, decisions table, guardrails, editing rules, event log.
+- `delivery-queue-<slug>.md` beside the source, from [`references/queue-template.md`](references/queue-template.md): metadata, reading order, standing authorization, claim protocol including the expansion step, the board, per-kind row instructions, worktree rules, stack ledger, release plan, unit briefs, merge gates, Human review, decisions table, guardrails, editing rules, event log.
 - A recurring schedule, created only after the human approves.
 - A short report: the slices and their units, the first claimable row, how many rows to expect per unit, the scheduler, and what the human does next.
 
@@ -96,7 +102,7 @@ The tick runs unattended, so it needs a permission mode that lets it edit, run g
 
 | It does | It never does |
 |---|---|
-| Writes the queue and schedules the tick | Claim a task, or run one to "get it started" |
+| Writes the queue and schedules the tick | Claim a row, or run one to "get it started" |
 | Takes the slicing and its order from the source | Re-slice, re-order, or re-scope the delivery |
 | Confirms the slice → unit split with the human | Derive units silently and start specifying |
 | Lists the exact pushes, PRs and the PR cap the human authorized | License any outward act beyond that list |

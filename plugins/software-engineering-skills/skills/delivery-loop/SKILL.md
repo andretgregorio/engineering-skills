@@ -1,9 +1,9 @@
 ---
 name: delivery-loop
-description: Turns a design document or story map whose delivery is already sliced into a self-running delivery queue — one markdown queue file that scheduled agents claim tasks from, one at a time, so every slice gets its spec written, then its plan, then every task that plan contains built as its own commit, and its PRs opened, unattended and in order. The queue grows itself: each PLAN task expands the board into one row per task it planned, so the work is scheduled at the granularity the plan actually chose rather than one the queue guessed in advance. A conflict that needs a decision stops the queue with a Human review block that explains the context and leaves a space for the human's answer; the next tick after the answer resumes the task. It writes the queue, gets the human's approval, schedules the recurring tick, and stops — it never claims a task itself. Use when a sliced design document, story map or release plan is approved and should be taken all the way to open PRs by scheduled agents rather than in one live session, or when the user says "create a delivery loop", "queue this design doc", "deliver this story map", "build these slices overnight", or invokes /delivery-loop.
+description: Turns a design document or story map whose delivery is already sliced into a self-running delivery queue — one markdown queue file that scheduled agents claim tasks from, one at a time, so every slice gets its spec written, then its plan, then every pull request that plan proposes built and opened — one agent, one session, one PR, with every task of that PR as its own commit — unattended and in order. The queue grows itself: each PLAN task expands the board into one row per pull request it planned, so the work is scheduled at the granularity the plan actually chose rather than one the queue guessed in advance. A conflict that needs a decision stops the queue with a Human review block that explains the context and leaves a space for the human's answer; the next tick after the answer resumes the task. It writes the queue, gets the human's approval, schedules the recurring tick, and stops — it never claims a task itself. Use when a sliced design document, story map or release plan is approved and should be taken all the way to open PRs by scheduled agents rather than in one live session, or when the user says "create a delivery loop", "queue this design doc", "deliver this story map", "build these slices overnight", or invokes /delivery-loop.
 role: orchestrator
 user-invocable: true
-argument-hint: "[--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,task|plan,task] [--max-open-prs <n>] [--no-schedule] [--headless]"
+argument-hint: "[--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,code|plan,code] [--max-open-prs <n>] [--no-schedule] [--headless]"
 model: opus
 ---
 
@@ -17,7 +17,7 @@ Its readers are the claiming agent with no memory, the human who answers its que
 
 The template is [`references/queue-template.md`](references/queue-template.md). Read it before step 6; this file explains the decisions behind it.
 
-**This is the upstream sibling of `software-engineering-skills:implementation-loop`.** That one starts from an approved plan and schedules its PRs. This one starts *before a spec exists*: it writes the specs and the plans too, and schedules the individual tasks those plans produce. If the input is already an approved plan, that is the other skill — say so and stop.
+**This is the upstream sibling of `software-engineering-skills:implementation-loop`.** That one starts from an approved plan and schedules its PRs. This one starts *before a spec exists*: it writes the specs and the plans too, and schedules the pull requests those plans produce. If the input is already an approved plan, that is the other skill — say so and stop.
 
 ## What this skill does not produce
 
@@ -29,8 +29,8 @@ The template is [`references/queue-template.md`](references/queue-template.md). 
 ## Rules
 
 - **Serial by construction.** At most one row is ever `READY`. Finishing a row readies the next; nothing readies two.
-- **The board grows.** A PLAN task appends the rows for the tasks it planned, in the same locked edit that marks itself `DONE`. One row per plan task, one row per plan PR, nothing invented. See *The board grows itself*.
-- **One worktree per PR branch, owned by that branch.** Its task rows run in it, one after another; nothing else does. A row that finds the worktree dirty, or its HEAD somewhere the ledger does not record, stops. See *Worktrees*.
+- **The board grows.** A PLAN task appends the rows for the pull requests it planned, in the same locked edit that marks itself `DONE`. One row per plan PR, carrying that PR's whole task list, nothing invented. See *The board grows itself*.
+- **One worktree per CODE row, created by it and never handed on.** A row that finds a worktree or a branch where its own must go, and the ledger does not record it as this row's, stops rather than adopting it. See *Worktrees*.
 - **Two channels to the human, never confused.** A conflict that makes the work wrong either way is a **Human review**: the queue stops. A question that can proceed on a stated assumption is a **Decisions awaiting the human** row: the queue keeps moving.
 - **The board is the only signal.** A task is done when its row says `DONE`, not when its artifact exists, not when its commit exists. Every board edit happens under the lock, with its event-log line in the same edit.
 - **Read at the ref the branch will be cut from**, not at a working tree. A slice built on top of unmerged slices is specified against their tips, not against the base branch.
@@ -47,45 +47,45 @@ So the queue has three levels, and only the middle one is a document boundary:
 |---|---|---|
 | **Slice** `S<n>` | The source's release slicing | A releasable increment with an outcome and a guardrail metric. Delivered, not merged, by the queue |
 | **Unit** `S<n>.U<m>` | One rib / one sliced item | One spec, one plan. The smallest thing `software-engineering-skills:specs` accepts |
-| **Task** | The unit's plan | One plan task, one commit. Written by the plan, not by you |
+| **PR** `S<n>.U<m> · PR<k>` | The unit's plan | One pull request of the plan's stack — every task it holds, one commit each, built by one agent in one session and opened at the end. Written by the plan, not by you |
 
 Units are ordered within a slice by the source's priority — walking-skeleton ribs first, then `prioritization.md`'s order — and slices in release order. That ordering is the board.
 
 ## Task stages
 
-Per unit, by default: **SPEC → PLAN → (the plan's tasks, one row each) → PR (one row each)**.
+Per unit, by default: **SPEC → PLAN → (the plan's pull requests, one row each)**.
 
 - **SPEC** writes `spec-S<n>-U<m>-<slug>.md` with `software-engineering-skills:specs`, scoped to that unit alone, verified against the code at the ref its branches will be cut from.
 - **PLAN** writes `plan-S<n>-U<m>-<slug>.md` with `software-engineering-skills:plan`, then **expands the board**.
-- **A task row** builds exactly one plan task — one commit, through `software-engineering-skills:build` — in its PR's worktree. No branches created beyond its own, nothing pushed, no PR opened.
-- **A PR row** closes a branch: the branch-level checks, the conformance judge, the push, the pull request, the monitor.
+- **A CODE row** delivers one whole pull request: it creates the branch's worktree, builds **every task that PR's checklist holds** — in plan order, through `software-engineering-skills:build`, one commit per task — then runs the branch checks, the conformance judge, the push, the pull request and the monitor. One agent, one session, from the first commit to the open PR.
 
-`--stages plan,task` drops the SPEC rows, and is correct only when the source already carries an approved spec per unit. Decide this in step 3 and state it in the queue. There is no task-only mode: without a plan there are no task rows to schedule, which is exactly what `software-engineering-skills:implementation-loop` is for.
+**A pull request is the unit of scheduling because it is the unit of review.** Splitting a PR's tasks across rows puts a cold agent and a worktree handover between commits that only make sense together, leaves a branch half-built between ticks, and buys no parallelism — the queue is serial anyway. Tasks are still one commit each and still verified one at a time; what changed is that one agent makes all of them and finishes by opening the PR. **A CODE row never stops at a green branch**: a row that has built its last task and not opened its PR is not `DONE`.
+
+`--stages plan,code` drops the SPEC rows, and is correct only when the source already carries an approved spec per unit. Decide this in step 3 and state it in the queue. There is no code-only mode: without a plan there are no pull requests to schedule, which is exactly what `software-engineering-skills:implementation-loop` is for.
 
 ## The board grows itself
 
-A queue cannot list its task rows in advance, because the tasks do not exist until the plan is written. Guessing them is worse than useless — the board would then disagree with the plan, and the plan is what the builder reads.
+A queue cannot list its build rows in advance, because the pull requests do not exist until the plan is written. Guessing them is worse than useless — the board would then disagree with the plan, and the plan is what the builder reads.
 
 So the PLAN row's completion edit is also an **expansion**, under the same lock, in one edit:
 
 1. Read the plan's `## PR Stack` table and each PR's task checklist.
-2. Append one board row per plan task, in plan order, `Kind` = `TASK`, keeping the plan's own task IDs — `S1.U2 · E1`, `S1.U2 · P2` — so the board and the plan never need translating.
-3. Append one row per plan PR, `Kind` = `PR`, immediately after the last task row assigned to it.
-4. Append one **Stack ledger** line per plan PR: repo, branch, PR base, and `cut from: resolved at first task`.
-5. Mark the PLAN row `DONE` and flip the first appended row to `READY`.
-6. Log one event line naming the counts: *expanded S1.U2 into 6 task rows across 2 PRs*.
+2. Append one board row per plan PR, in plan order, `Kind` = `CODE`, `Task` = `<unit> · PR<k>`, and in its **Tasks** cell every task ID that PR's checklist holds, in plan order, keeping the plan's own IDs — `E1, E2, P3` — so the board and the plan never need translating. That cell is the row's contract: it is what the row builds, what a reclaimer diffs the branch against, and what the conformance judge is handed.
+3. Append one **Stack ledger** line per plan PR: repo, branch, PR base, and `cut from: resolved by its CODE row`.
+4. Mark the PLAN row `DONE` and flip the first appended row to `READY`.
+5. Log one event line naming the counts: *expanded S1.U2 into 2 CODE rows covering 6 plan tasks*.
 
 Three rules keep the expansion honest:
 
-- **One row per plan task, and nothing else.** No merging two small tasks into a row, no splitting a big one. If the plan is wrong, that is a `software-engineering-skills:plan` conversation, not a board edit.
+- **One row per plan PR, covering every task in its checklist and nothing else.** No splitting one PR across rows, no merging two PRs into one, no dropping or inventing a task. If the plan's PR split is wrong, that is a `software-engineering-skills:plan` conversation, not a board edit.
 - **Branch names come from the plan's stack table**, checked against the remote for collisions at expansion time. A collision is a Human review, not a rename.
-- **The expansion has a ceiling.** More than `<max tasks per unit>` (default 15) or more than four PRs means the unit was too big to be one spec. Expand anyway, and record a row in *Decisions awaiting the human* saying so — the work is not wrong, the slicing was coarse, and the human decides whether that matters.
+- **The expansion has a ceiling.** More than `<max tasks per unit>` (default 15) plan tasks or more than four PRs means the unit was too big to be one spec; a single PR holding more than `<max tasks per PR>` (default 8) is more than one agent should carry in one session. Expand anyway, and record a row in *Decisions awaiting the human* saying which ceiling was crossed — the work is not wrong, the slicing was coarse, and the human decides whether that matters.
 
-**Units are lazy too.** A unit's SPEC and PLAN rows are appended by the previous unit's last PR row, for the same reason: what the next unit must be specified against depends on what the previous one actually landed. Only the first unit's rows exist when the queue is written, and the queue says so out loud, so a human reading a two-row board does not think work is missing.
+**Units are lazy too.** A unit's SPEC and PLAN rows are appended by the previous unit's last CODE row, for the same reason: what the next unit must be specified against depends on what the previous one actually landed. Only the first unit's rows exist when the queue is written, and the queue says so out loud, so a human reading a two-row board does not think work is missing.
 
 ## The stack, and how it shortens
 
-The queue never merges, so every branch is cut from something the queue itself produced — until the human merges, at which point the chain can reset. That decision is made **per PR, at the moment its first task row creates the worktree**, not written in advance:
+The queue never merges, so every branch is cut from something the queue itself produced — until the human merges, at which point the chain can reset. That decision is made **per PR, at the moment its CODE row creates the worktree**, not written in advance:
 
 - Every PR after the first in a unit: cut from `origin/<previous PR's branch>`.
 - A unit's first PR: cut from `origin/<base branch>` **if** every earlier unit's PRs are merged (`gh pr view --json state`, then `git merge-base --is-ancestor`); otherwise from `origin/<last branch of the most recent unit>`.
@@ -93,26 +93,27 @@ The queue never merges, so every branch is cut from something the queue itself p
 
 This is what makes a long unattended delivery survivable: a human who merges as they go keeps the stack one or two deep; a human who does not gets a correct, deep stack instead of a queue that quietly built each slice against a base that does not have the previous slice in it.
 
-**The open-PR cap is part of the authorization.** The queue may hold at most `--max-open-prs` (default 4) unmerged PRs at once. The first task row of a PR that would exceed it does not start: it raises a Human review — merge the stack below, raise the cap, or pause — because opening a fifth PR is an outward-facing act the standing authorization does not cover. This is deliberate. A stack deeper than four is a restack cost nobody agreed to pay, and a delivery loop that outruns its reviewer is not delivering anything.
+**The open-PR cap is part of the authorization.** The queue may hold at most `--max-open-prs` (default 4) unmerged PRs at once. A CODE row whose PR would exceed it does not start: it raises a Human review — merge the stack below, raise the cap, or pause — because opening a fifth PR is an outward-facing act the standing authorization does not cover. This is deliberate. A stack deeper than four is a restack cost nobody agreed to pay, and a delivery loop that outruns its reviewer is not delivering anything.
 
 ## Worktrees
 
-**One worktree per PR branch**, at `<root>/<delivery-slug>/<repo>/<branch>`, created by that PR's first task row with `git worktree add -b <branch> <path> <cut-from>` and kept as that PR's home until the PR merges or closes. The path follows the harness first — a worktree convention in the user's or project's `CLAUDE.md` or rules wins — and `software-engineering-skills:build`'s default layout otherwise.
+**One worktree per CODE row**, at `<root>/<delivery-slug>/<repo>/<branch>`, created by that row with `git worktree add -b <branch> <path> <cut-from>` and left in place as that PR's home until the PR merges or closes. The path follows the harness first — a worktree convention in the user's or project's `CLAUDE.md` or rules wins — and `software-engineering-skills:build`'s default layout otherwise.
 
-This is where the delivery loop differs from `software-engineering-skills:implementation-loop`, which gives every code task its own worktree and never reuses one. Here a branch is built by several task rows in succession, so they must share it. The hazard that rule was protecting against — a worktree holding state nobody owns — is handled instead by **ownership plus a precondition**:
+Because a CODE row builds its whole branch in one session, a worktree is never handed from one row to another, and there is no shared mid-branch state to precondition. What is left is the foreign-state rule:
 
-- The ledger records, per branch, its worktree path and the SHA its last task row committed.
-- Every task row, before it writes anything: the worktree is the one the ledger names for **its** branch; `git status --porcelain` is empty; `HEAD` is the SHA the ledger records (or the cut-from, for the first task). Anything else — uncommitted edits, an unexpected commit, a detached HEAD, a path that exists but is not in the ledger — is a **Human review**. Never clean it up, never adopt it, never `git checkout` past it.
+- **A path or a branch that already exists** where this row's must go, and that the ledger does not record as this row's, is a **Human review**. Never `git checkout`, `git stash`, `git reset` or `rm -rf` your way past it — someone's work is in there, and whose it is decides what happens to it. The one exception is the reclaim case in claim-protocol step 8, where the worktree belongs to the stalled agent that held **this same row**.
 - **SPEC and PLAN rows keep no checkout.** They read with `git show` / `git grep` at the ref, or a throwaway `git worktree add --detach` removed before they finish.
+- **Reading another PR's code** is done at a ref, never by opening another PR's worktree — it can hold work that is on no branch.
 - **Updating an earlier branch** — merging the base up the stack — happens in a throwaway detached worktree, pushed with `git push origin HEAD:<branch>`, never inside that branch's own worktree.
+- **Monitors never use a queue worktree.** Their own throwaway checkout, cleaned up by them.
 - **The queue never removes a PR worktree.** It is the PR's home until the PR merges or closes; cleanup is the human's, or `software-engineering-skills:monitor-pr`'s.
-- **The cost is real and accepted**: one bootstrap per PR branch, not per task. Say so in the queue.
+- **The cost is one bootstrap per PR branch**, paid once by its CODE row. Say so in the queue.
 
 ## The release plan
 
 The source slices delivery for a reason, and the queue has to carry that reason forward or the slicing is decoration. The queue's **Release plan** section holds, per slice: the outcome and its KPI, the units it contains, the feature flag and its default, the guardrail metric with its threshold, and a **release gate** — what a human must do to actually release it.
 
-Agents record against it; they never clear it. When a slice's last PR row finishes, the claiming agent sets that slice to `delivered — awaiting the human` in the release plan, sends one notification, and readies the next slice's first row. Delivery continues while releases queue up behind a human, which is the intended shape: building is unattended, releasing is not.
+Agents record against it; they never clear it. When a slice's last CODE row finishes, the claiming agent sets that slice to `delivered — awaiting the human` in the release plan, sends one notification, and readies the next slice's first row. Delivery continues while releases queue up behind a human, which is the intended shape: building is unattended, releasing is not.
 
 ## Asking the human
 
@@ -142,7 +143,7 @@ The lock is a directory in `/tmp` and the repositories are local checkouts, so t
 
 For the desktop scheduled task: create it through the desktop app where you can. Where you can only write the file, write it and have the human confirm in the app that it is listed and set to the cadence — do not claim a schedule exists because a file does. Either way, tell the human the **permission mode** the tick must run with: it edits files, runs git, pushes and calls `gh` with nobody watching, and a tick stuck on a permission prompt holds a `CLAIMED` row until the reclaim window passes.
 
-**Cadence** defaults to 30 minutes. Most ticks are no-ops by design. The **reclaim window** defaults to 6 hours — longer than the slowest row is expected to take, or live work gets stolen. Task rows are short (one commit); SPEC and PLAN rows are the long ones.
+**Cadence** defaults to 30 minutes. Most ticks are no-ops by design. The **reclaim window** defaults to 6 hours and must exceed the slowest row, or live work gets stolen. **A CODE row is the slow one** — it builds every task of a PR and opens it — so raise the window for a queue whose PRs carry many tasks, and prefer a heartbeat (the row rewrites its own `Claimed` timestamp hourly) to a window guessed generously.
 
 **Ending.** The agent that finishes the last row sets the queue's Status to `complete` and logs that the schedule can be removed; later ticks see `complete` and exit. It removes the schedule only when it owns it — a `CronCreate` job in its own session. A desktop scheduled task is removed by the human.
 
@@ -165,7 +166,7 @@ Present the slice → unit table to the human and get it confirmed. This is the 
 
 ### 3. Decide the stages
 
-`spec,plan,task` by default. `plan,task` only when an approved spec already exists per unit — name the files. `--stages` overrides. Ask when it is not clear-cut: a queue that skips SPEC on a source that never had one plans from guesses.
+`spec,plan,code` by default. `plan,code` only when an approved spec already exists per unit — name the files. `--stages` overrides. Ask when it is not clear-cut: a queue that skips SPEC on a source that never had one plans from guesses.
 
 ### 4. Preflight (hard gate)
 
@@ -203,8 +204,9 @@ Hand the queue, the source and repository access to an independent read-only sub
 - [ ] **Self-sufficient**: an agent given only the tick prompt could claim, do and record any row — including expanding a board — without this conversation. Every path absolute or relative to a stated root; no "as discussed".
 - [ ] **Complete**: every slice and unit the human confirmed in step 2 has its rows and its brief, in order; nothing in the queue the source does not ask for; every unqueued slice named as such.
 - [ ] **Serial**: exactly one `READY` row; every unblocking rule readies exactly one successor — including the expansion's; the last row readies nothing and sets `complete`.
-- [ ] **The expansion contract is executable**: a PLAN agent can read it and know exactly which rows to append, with which IDs, in which order, and what to do when the plan exceeds the ceiling or collides with an existing branch name.
-- [ ] **Worktrees**: one per PR branch; the ownership precondition (clean tree, ledger HEAD) is stated for task rows; SPEC/PLAN rows keep no checkout; the reclaim exception is the only other entry.
+- [ ] **The expansion contract is executable**: a PLAN agent can read it and know exactly which rows to append — one per plan PR, each listing that PR's whole task list — with which IDs, in which order, and what to do when the plan exceeds a ceiling or collides with an existing branch name.
+- [ ] **One PR per row**: every CODE row names every plan task it covers, builds each as its own commit, and ends by opening the PR — no row can be `DONE` on a branch it did not open, and no plan task is on no row.
+- [ ] **Worktrees**: one per CODE row, created by it and never handed on; a pre-existing path or branch is a Human review; SPEC/PLAN rows keep no checkout; the reclaim exception is the only reuse.
 - [ ] **Stack**: the cut-from resolution rule is stated with its commands, the ledger records the resolved answer and its evidence, and the open-PR cap is enforced at a named step.
 - [ ] **Human review**: the section, its answer procedure and its template are present; the claim protocol resumes an `ANSWERED` block; the test separating it from the decisions table is stated.
 - [ ] **Authorization**: every outward-facing act a row performs is on the standing authorization list — including the cap — and nothing else is.
@@ -236,7 +238,7 @@ The run is headless when `--headless` is passed or there is provably no human in
 ````markdown
 # Delivery loop: <Feature> — <scheduled | written, not scheduled>
 
-**Queue**: <path>   **Source**: <path>   **Stages**: SPEC → PLAN → tasks → PR | PLAN → tasks → PR
+**Queue**: <path>   **Source**: <path>   **Stages**: SPEC → PLAN → CODE | PLAN → CODE
 **Scheduler**: <desktop scheduled task `<name>` | CronCreate `<id>` (session-only, expires <date>) | none>   **Cadence**: every <n> min   **Reclaim after**: <n> h   **Open-PR cap**: <n>
 
 | Slice | Outcome / KPI | Units | Rows now | Release gate |
@@ -244,8 +246,8 @@ The run is headless when `--headless` is passed or there is provably no human in
 <!-- "Rows now" is what exists before any expansion — 2 per unit with SPEC, 1 without. -->
 
 **First claimable**: `<task>` — expect the first claim within <n> minutes.
-**The board grows**: each PLAN row appends one row per task it plans and one per PR. Expect ~<n> rows per unit.
-**Worktrees**: one per PR branch at `<root>/<delivery-slug>/<repo>/<branch>`; none are removed by the queue.
+**The board grows**: each PLAN row appends one row per pull request it plans, each carrying that PR's whole task list. Expect ~<n> rows per unit.
+**Worktrees**: one per CODE row at `<root>/<delivery-slug>/<repo>/<branch>`; none are removed by the queue.
 **Standing authorization**: <the list, one line, including the cap>
 **Slices not queued**: <ids and why — or none>
 **Open questions carried in**: <Q ids, one line each — or none>
@@ -260,4 +262,4 @@ The run is headless when `--headless` is passed or there is provably no human in
 
 ## Running this by hand (no skill)
 
-The artifact matters, not the automation. A human doing this manually writes one file that lists the release slices in order and breaks each into the smallest pieces that could be specified on their own; marks exactly one step ready; and adds a rule saying that the person who writes a plan must also write that plan's tasks onto the board, because nobody could have listed them earlier. It tells every agent which branch's directory to work in and to refuse to touch it if someone left changes there; it caps how many pull requests may be open at once so the work cannot outrun whoever reviews it; it gives the agents one place to write a question that can wait and another, louder place for one that cannot — with the context written out and an empty space for the answer; and it schedules a prompt that says *follow this file*. The discipline that carries the value is that the board is grown by the document that knows the answer rather than guessed up front, and that when an agent meets something it must not decide, it stops and writes the question well enough to be answered from a phone.
+The artifact matters, not the automation. A human doing this manually writes one file that lists the release slices in order and breaks each into the smallest pieces that could be specified on their own; marks exactly one step ready; and adds a rule saying that the person who writes a plan must also write that plan's pull requests onto the board — one line each, listing the tasks it carries — because nobody could have listed them earlier. It tells every agent to make its own directory for the branch it is building, and to refuse to touch one somebody else left behind; it caps how many pull requests may be open at once so the work cannot outrun whoever reviews it; it gives the agents one place to write a question that can wait and another, louder place for one that cannot — with the context written out and an empty space for the answer; and it schedules a prompt that says *follow this file*. The discipline that carries the value is that the board is grown by the document that knows the answer rather than guessed up front; that one pull request is one sitting, so whoever writes its first commit is the one who opens it; and that when an agent meets something it must not decide, it stops and writes the question well enough to be answered from a phone.

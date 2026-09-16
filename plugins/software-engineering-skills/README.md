@@ -129,17 +129,18 @@ Not to be confused with the **built-in** `/loop`, which runs a prompt on a recur
 
 *[Skill README →](skills/delivery-loop/README.md)*
 
-Turns **a sliced delivery** — a design document, story map or release plan — into a queue that specifies, plans and builds itself. Where `/implementation-loop` starts from a finished plan, this starts one phase earlier and schedules one level finer: per unit, a spec through `/specs`, a plan through `/plan`, then **one row per task in that plan**, each built as exactly one commit through `/build`, then one row per pull request.
+Turns **a sliced delivery** — a design document, story map or release plan — into a queue that specifies, plans and builds itself. Where `/implementation-loop` starts from a finished plan, this starts one phase earlier: per unit, a spec through `/specs`, a plan through `/plan`, then **one row per pull request that plan proposes** — one agent building every task of that PR as its own commit through `/build`, and opening the PR at the end of it.
 
-- **Three levels, one document boundary.** A **slice** is a releasable increment from the source's slicing; a **unit** is one rib or sliced item — the smallest thing `/specs` accepts, and therefore one spec and one plan; a **task** is one plan task and one commit. The slice → unit split is confirmed with the human before anything is written.
-- **The board grows itself.** Task rows cannot exist before the plan that decides them, and a guessed row would disagree with the plan the builder actually reads — so each PLAN row appends its own successors, keeping the plan's task IDs, in the same locked edit that completes it. One row per plan task, nothing merged, nothing split.
-- **One worktree per PR branch**, shared by that branch's task rows in succession, with the cost of sharing bought back by a precondition: **a clean tree at exactly the SHA the ledger records**, or it is a Human review — never a `checkout`, `stash` or `reset` past someone's work.
+- **Three levels, one document boundary.** A **slice** is a releasable increment from the source's slicing; a **unit** is one rib or sliced item — the smallest thing `/specs` accepts, and therefore one spec and one plan; a **PR** is one pull request of that plan's stack, every task in it one commit. The slice → unit split is confirmed with the human before anything is written.
+- **The board grows itself.** Build rows cannot exist before the plan that decides them, and a guessed row would disagree with the plan the builder actually reads — so each PLAN row appends its own successors, one per plan PR listing that PR's task IDs, in the same locked edit that completes it. Nothing split, nothing merged, no task on no row.
+- **A pull request is one sitting.** The PR is the unit of scheduling because it is the unit of review: the same agent writes the first commit and opens the PR, with the branch checks and the conformance judge in between. A row that has not opened its PR is not done.
+- **One worktree per PR branch**, created by that PR's row and never handed on. A path or branch sitting where a row's must go, and not in the ledger as that row's, is a Human review — never a `checkout`, `stash` or `reset` past someone's work.
 - **The stack shortens when the human merges.** Each branch's cut-from is resolved when its worktree is created: a unit's first PR comes off `<base branch>` if the earlier units are merged, otherwise off the last branch in the ledger, with the evidence recorded.
-- **The open-PR cap is part of the authorization** (default 4). The task row that would exceed it stops and asks — a delivery loop that outruns its reviewer is not delivering anything.
+- **The open-PR cap is part of the authorization** (default 4). A row whose PR would exceed it stops and asks — a delivery loop that outruns its reviewer is not delivering anything.
 - **Releases stay human.** A Release plan carries each slice's outcome, flag, guardrail metric and release gate; agents mark a slice `delivered — awaiting the human` and never clear a gate.
 
 ```
-/delivery-loop [--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,task|plan,task] [--max-open-prs <n>] [--no-schedule] [--headless]
+/delivery-loop [--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,code|plan,code] [--max-open-prs <n>] [--no-schedule] [--headless]
 ```
 
 ### `/implementation-loop`

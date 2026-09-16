@@ -12,7 +12,7 @@ One decision: **which loop runs this document.** Then it hands over and stops.
 
 | | Source | What it schedules | Skill |
 |---|---|---|---|
-| **Delivery loop** | Design doc, story map or release plan with a **sliced** delivery | Per unit: SPEC → PLAN → one row per planned task → one row per PR. The board grows as plans are written | [`delivery-loop`](../delivery-loop/README.md) |
+| **Delivery loop** | Design doc, story map or release plan with a **sliced** delivery | Per unit: SPEC → PLAN → one row per planned PR, each building that PR's tasks and opening it. The board grows as plans are written | [`delivery-loop`](../delivery-loop/README.md) |
 | **Implementation loop** | An **approved plan** that orders its PRs | Per PR: SPEC → PLAN → CODE, or CODE-only when the plan is already buildable | [`implementation-loop`](../implementation-loop/README.md) |
 
 Both write a queue file, take the human's approval, schedule a recurring tick, and stop. The wrong choice is expensive in both directions: the implementation loop on a sliced design doc builds from guesses, and the delivery loop on a finished plan re-specifies work that was already planned.

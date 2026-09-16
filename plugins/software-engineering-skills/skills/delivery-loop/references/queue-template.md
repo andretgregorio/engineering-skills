@@ -1,6 +1,6 @@
 # Delivery queue template
 
-The file `/delivery-loop` writes. Everything between the two outer fences below is the queue. `<…>` are placeholders the skill fills, `<a | b>` is a choice the skill makes, and `<!-- … -->` comments are instructions to the skill — every one of them is gone before the queue is scheduled. Sections marked *(no-SPEC queues: drop)* are removed when the queue runs `--stages plan,task`. The fenced **Human review** template is the one fence that stays: it is what agents copy.
+The file `/delivery-loop` writes. Everything between the two outer fences below is the queue. `<…>` are placeholders the skill fills, `<a | b>` is a choice the skill makes, and `<!-- … -->` comments are instructions to the skill — every one of them is gone before the queue is scheduled. Sections marked *(no-SPEC queues: drop)* are removed when the queue runs `--stages plan,code`. The fenced **Human review** template is the one fence that stays: it is what agents copy.
 
 The document is written for its readers in this order: a claiming agent with no memory of this conversation, the human who answers its questions, and whoever reads the ledger after the release has shipped.
 
@@ -15,7 +15,7 @@ The document is written for its readers in this order: a claiming agent with no 
 **Worktree root**: `<root>/<delivery-slug>/` — one worktree per PR branch, at `<root>/<delivery-slug>/<repo>/<branch>`; see **Worktrees**
 **Stack update strategy**: <merge | rebase> — <evidence: the ruleset, branch protection setting or repo rule that decided it>
 **Open-PR path**: <the repo's own `<skill>` skill | `software-engineering-skills:open-pr`>
-**Open-PR cap**: <n> unmerged PRs at once. A task row that would exceed it stops the queue — see **Standing authorization**
+**Open-PR cap**: <n> unmerged PRs at once. A CODE row that would exceed it stops the queue — see **Standing authorization**
 **Cadence**: one agent attempts a claim every <n> minutes, via <scheduler> `<name or id>`. At most one task is claimable at any moment, so most ticks are a no-op and should exit silently
 **Tick prompt**: `Follow the instructions in <queue path>. Read the whole file before acting. If no task is claimable, exit without writing anything.`
 **Lock**: `/tmp/<ticket-slug>-delivery.lock`
@@ -25,9 +25,11 @@ The document is written for its readers in this order: a claiming agent with no 
 
 ## What this queue is
 
-The source slices delivery into <n> releases. Each slice holds one or more **units** — the smallest piece that can carry a spec of its own — and each unit is produced by <a **spec** agent that writes `spec-S<n>-U<m>-<slug>.md`, a **plan** agent that writes `plan-S<n>-U<m>-<slug>.md` from that spec, | a **plan** agent that writes `plan-S<n>-U<m>-<slug>.md` from the existing spec,> and then one agent per task in that plan, each producing exactly one commit, and one agent per pull request, which pushes the branch and opens it.
+The source slices delivery into <n> releases. Each slice holds one or more **units** — the smallest piece that can carry a spec of its own — and each unit is produced by <a **spec** agent that writes `spec-S<n>-U<m>-<slug>.md`, a **plan** agent that writes `plan-S<n>-U<m>-<slug>.md` from that spec, | a **plan** agent that writes `plan-S<n>-U<m>-<slug>.md` from the existing spec,> and then **one agent per pull request in that plan**, which builds every task that PR holds as its own commit, pushes the branch and opens the PR.
 
-**The board grows.** Only the rows for the first unit's <spec and plan | plan> exist right now. The task rows cannot exist yet, because the tasks are decided by the plan that has not been written — so each **PLAN** row appends its own successors to the board when it finishes. A short board is not a board with work missing.
+**The board grows.** Only the rows for the first unit's <spec and plan | plan> exist right now. The build rows cannot exist yet, because the pull requests are decided by the plan that has not been written — so each **PLAN** row appends its own successors to the board when it finishes. A short board is not a board with work missing.
+
+**Two things are called a task in this file, and they are not the same.** A **row** on the board is the unit of scheduling — a SPEC, a PLAN or a CODE row, claimed by one agent for one session. A **plan task** is one item in a plan's PR checklist — one commit. A CODE row builds several plan tasks; the claim protocol's "task" always means the row.
 
 The queue is serial by construction: at most one row is ever `READY`. An agent that finds nothing claimable has nothing to do and stops. This is the normal outcome of most ticks and is not a failure.
 
@@ -42,7 +44,7 @@ Read these before touching anything, in this order. Do not begin work from this 
 1. This file, in full — the board, the stack ledger, the brief for your unit, **Human review**, the decisions table, the guardrails.
 2. `<source>` (sibling) — the slicing, its binding decisions, its open questions, and its scope boundaries, which are what you are allowed to touch.
 3. <upstream documents the source cites: feature description, prioritization, spike reports — sibling paths>
-4. Your unit's `spec-…md` and `plan-…md` when they exist — a TASK or PR row reads the plan; a PLAN row reads the spec.
+4. Your unit's `spec-…md` and `plan-…md` when they exist — a CODE row reads the plan; a PLAN row reads the spec.
 5. <the house shape to copy for SPEC/PLAN rows, e.g. an earlier spec and plan in this directory>
 6. `<workspace CLAUDE.md>`, each repository's `CLAUDE.md`, and the `.claude/rules/` files that match the files you touch. The repository's rules win over anything restated here.
 
@@ -52,7 +54,7 @@ The human approved this queue on <date>. That approval is the standing authoriza
 
 - Pushing the branches recorded in the **Stack ledger**, and only those.
 - Opening the pull requests named in the ledger, with the titles their plans give, against the bases the ledger gives<, as drafts>.
-- Holding **at most <n> unmerged pull requests open at once**. A task row whose PR would be the <n+1>th does not start — it raises a **Human review** asking the human to merge the bottom of the stack, raise the cap, or pause the queue.
+- Holding **at most <n> unmerged pull requests open at once**. A CODE row whose PR would be the <n+1>th does not start — it raises a **Human review** asking the human to merge the bottom of the stack, raise the cap, or pause the queue.
 - <anything else the human explicitly authorized — or delete this line>
 
 When a skill you invoke pauses to ask a human for input it could take from this queue — a PR body's "why", a final preview — answer it from the unit brief and the plan, proceed on this authorization, and say so in the plan's Build Log. Anything outward-facing not on this list is a **Human review**.
@@ -101,7 +103,7 @@ rm -rf "$LOCK"
 
 Release before starting the task. The `CLAIMED` row is the lock for the duration of the work; the directory lock only protects the board edit.
 
-A TASK row that creates a worktree re-acquires the lock once, early, to write the branch, its resolved cut-from and the worktree path into the **Stack ledger** the moment the worktree exists — so a reclaimer can find it.
+A CODE row re-acquires the lock once, early, to write the branch, its resolved cut-from and the worktree path into the **Stack ledger** the moment the worktree exists — so a reclaimer can find it. It re-acquires it again after each task's commit to update the ledger's **Head**, so a reclaimer can see how far the branch got without reading the branch.
 
 ### 4 · Record completion
 
@@ -132,9 +134,9 @@ When the task completes, the step-4 edit also sets the block's Status to `APPLIE
 A row `CLAIMED` for more than **<6> hours** with no completion may be reclaimed by any agent, under the lock. Before resetting it, look for partial output — a spec or plan file already on disk, a worktree at the path the **Stack ledger** records, a commit on the branch, an open PR — and continue from it rather than starting over.
 
 - A **PLAN** row that already wrote its plan file but did not expand the board: read the plan and run the expansion.
-- A **TASK** row whose branch already carries a commit naming its task ID: the task is built; verify it against the plan's acceptance criteria and complete the row.
-- A **TASK** row whose worktree is dirty: this is the one case where uncommitted work is expected. It is the stalled agent's, mid-task. Read it, finish or discard it deliberately, and say which in the event log — do not treat it as the foreign-state Human review that **Worktrees** describes.
-- A **PR** row whose branch is already pushed, or whose PR already exists: continue from there; never open a second PR for a branch.
+- A **CODE** row whose worktree exists: it is the stalled agent's, and it held this same row, so it is yours to continue in. Read `git -C <worktree> log --oneline <cut-from>..HEAD` against your row's **Tasks** cell to see which plan tasks already landed, and resume at the first one that did not. Never rebuild a task that is already committed, and never start the branch over.
+- A **CODE** row whose worktree is dirty: this is the one case where uncommitted work is expected. It is the stalled agent's, mid-task. Read it, finish or discard it deliberately, and say which in the event log — do not treat it as the foreign-state Human review that **Worktrees** describes.
+- A **CODE** row whose branch is already pushed, or whose PR already exists: continue from the step of **A CODE task** that it stopped at; never open a second PR for a branch.
 
 Read any `ANSWERED` **Human review** block for the task too. Append an event-log line naming what you found. Do not delete another agent's work.
 
@@ -144,21 +146,20 @@ Read any `ANSWERED` **Human review** block for the task too. Append an event-log
 
 Status values: `BLOCKED` (its predecessor has not finished) · `READY` (claimable now) · `CLAIMED` (an agent is working) · `DONE` · `NEEDS-HUMAN` (queue stopped; see the `HR-<n>` in Output).
 
-Kinds: `SPEC` · `PLAN` · `TASK` (one plan task, one commit) · `PR` (push and open one pull request).
+Kinds: `SPEC` · `PLAN` · `CODE` (one pull request: every task it holds as its own commit, then the PR opened).
 
-| Task | Kind | PR | Status | Claimed by | Claimed (UTC) | Completed (UTC) | Output |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **S1.U1-SPEC** | SPEC | — | READY | | | | |
-| **S1.U1-PLAN** | PLAN | — | BLOCKED | | | | |
-<!-- Nothing else yet. S1.U1-PLAN appends the TASK and PR rows for S1.U1, then the rows for S1.U2's SPEC and PLAN are appended by S1.U1's last PR row — see the unblocking rules below. -->
+| Task | Kind | PR | Tasks | Status | Claimed by | Claimed (UTC) | Completed (UTC) | Output |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **S1.U1-SPEC** | SPEC | — | — | READY | | | | |
+| **S1.U1-PLAN** | PLAN | — | — | BLOCKED | | | | |
+<!-- Nothing else yet. S1.U1-PLAN appends one CODE row per PR in its plan, each listing that PR's plan task IDs in its Tasks cell; the rows for S1.U2's SPEC and PLAN are appended by S1.U1's last CODE row — see the unblocking rules below. The Tasks cell is what a CODE row builds and what a reclaimer diffs the branch against, so it is never left empty. -->
 
 **Unblocking rules.** Rows are unblocked strictly downward, one successor each:
 
 - `<n>.<m>-SPEC` → `<n>.<m>-PLAN`.
 - `<n>.<m>-PLAN` → **expands** (see **A PLAN task**) and readies the first row it appended.
-- A `TASK` row → the next row of the same unit: the next `TASK`, or the `PR` row of its PR when it was that PR's last task.
-- A `PR` row → the first `TASK` row of the next PR in the same unit; when it was the unit's last PR, it appends the next unit's <`SPEC` | `PLAN`> and `PLAN` rows and readies the first of them.
-- The last `PR` row of the last unit of the last slice readies nothing: set this file's **Status** line to `complete`, mark the slice delivered in **Release plan**, and say in the event log that the schedule `<name or id>` can be removed.
+- A `CODE` row → the next `CODE` row of the same unit; when it was the unit's last PR, it appends the next unit's <`SPEC` | `PLAN`> and `PLAN` rows and readies the first of them.
+- The last `CODE` row of the last unit of the last slice readies nothing: set this file's **Status** line to `complete`, mark the slice delivered in **Release plan**, and say in the event log that the schedule `<name or id>` can be removed.
 
 ---
 
@@ -168,7 +169,7 @@ Kinds: `SPEC` · `PLAN` · `TASK` (one plan task, one commit) · `PR` (push and 
 
 Write `spec-S<n>-U<m>-<slug>.md` into this directory using the specs skill (`software-engineering-skills:specs`), for the scope of **that unit only** as its brief defines it. Copy the shape of `<house spec>`.
 
-**Read the code at the ref this unit's first branch will be cut from**, not at the base branch and not at a working tree: that is `origin/<base branch>` when every earlier unit's PRs are merged, and `origin/<last branch in the Stack ledger>` otherwise. Resolve it the same way a TASK row does (see **A TASK task**, step 1), state the ref and its SHA in the spec's metadata, and read through `git show <ref>:<path>` / `git grep <pattern> <ref>` or a throwaway `git worktree add --detach` you remove before you finish. Never read from another row's worktree: it can hold uncommitted work that is on no branch.
+**Read the code at the ref this unit's first branch will be cut from**, not at the base branch and not at a working tree: that is `origin/<base branch>` when every earlier unit's PRs are merged, and `origin/<last branch in the Stack ledger>` otherwise. Resolve it the same way a CODE row does (see **A CODE task**, step 1), state the ref and its SHA in the spec's metadata, and read through `git show <ref>:<path>` / `git grep <pattern> <ref>` or a throwaway `git worktree add --detach` you remove before you finish. Never read from another row's worktree: it can hold uncommitted work that is on no branch.
 
 The skill wants a human in the loop and there is not one. Resolve ambiguity in this order: the source's binding decisions settle most of it; the repositories' `.claude/rules/` settle convention questions; anything left goes in the Ambiguity Log with your recommendation **and** a row in **Decisions awaiting the human**, after which you proceed on your stated assumption. Only a conflict that passes step 6's test becomes a **Human review**.
 
@@ -182,84 +183,76 @@ The plan's metadata carries `**Repository**` and `**Base branch**`; its `## PR S
 
 Then, **in the same locked edit that completes your row** (claim protocol step 5), expand the board:
 
-1. For each PR in the plan's stack table, in order, and for each task in that PR's checklist, in order: append one board row, `Kind` = `TASK`, `Task` = `<unit> · <the plan's own task ID>` (`S1.U2 · E1`), `PR` = the plan's PR number, Status `BLOCKED`.
-2. After each PR's last task row, append one row with `Kind` = `PR`, `Task` = `<unit> · PR<k>`, Status `BLOCKED`.
-3. Append one **Stack ledger** line per PR: unit, repo, branch (from the plan), PR base (the previous PR's branch, or `resolved at first task` for the unit's first PR), everything else empty.
+1. For each PR in the plan's stack table, in order: append one board row, `Kind` = `CODE`, `Task` = `<unit> · PR<k>` (`S1.U2 · PR1`), `PR` = the plan's PR number, **Tasks** = every task ID in that PR's checklist, in plan order and with the plan's own IDs (`E1, E2, P3`), Status `BLOCKED`.
+2. Check your work against the plan before you write it: every task in every PR's checklist appears in exactly one row's **Tasks** cell, and no cell names a task the plan does not have. A plan task on no row is work that will never be built.
+3. Append one **Stack ledger** line per PR: unit, repo, branch (from the plan), PR base (the previous PR's branch, or `resolved by its CODE row` for the unit's first PR), everything else empty.
 4. Flip the first appended row to `READY`; mark your own row `DONE`.
-5. Append one event-log line naming the counts: `expanded <unit> into <t> task rows across <p> PRs`.
+5. Append one event-log line naming the counts: `expanded <unit> into <p> CODE rows covering <t> plan tasks`.
 
 Three rules keep the expansion honest:
 
-- **One row per plan task, and nothing else.** Never merge two small tasks into one row, never split a large one, never add a row the plan does not contain. If the plan is wrong, that is a plan problem, not a board edit.
+- **One row per plan PR, covering every task in its checklist and nothing else.** Never split one PR across two rows, never merge two PRs into one row, never drop or invent a task. If the plan's PR split is wrong, that is a plan problem, not a board edit.
 - **A branch name in the plan's stack table that already exists** — locally or on the remote — is a **Human review**. Do not rename it yourself: the name is in the plan, and the plan is what the builder reads.
-- **The ceiling is <15> task rows or <4> PRs for one unit.** Expand anyway, and add a row to **Decisions awaiting the human** saying the unit was coarser than one spec should be. The work is not wrong; the slicing was.
+- **The ceiling is <15> plan tasks or <4> PRs for one unit, and <8> tasks for one PR.** Expand anyway, and add a row to **Decisions awaiting the human** naming which ceiling was crossed — the unit was coarser than one spec should be, or one PR is more than a single session should carry. The work is not wrong; the slicing was.
 
 If the plan cannot be written because the spec is internally inconsistent, fix nothing silently: record it in **Decisions awaiting the human**, write the plan on the reading you judge correct, and say in the Approach section which reading you took. Set the plan's **Status** to `approved`.
 
-### A TASK task
+### A CODE task
 
-Build **exactly one** task of your unit's plan — the one your row names — as exactly one commit. In order:
+Deliver **one whole pull request**: every task its **Tasks** cell names, each as its own commit, and then the PR opened. One agent, one session, from the first commit to the open PR — do not stop at a green branch. In order:
 
-1. **Find or create your branch's worktree.** The **Stack ledger** line for your PR says which branch you are on.
-   - *The ledger records a worktree for this branch*: use it, and check its preconditions first — `git -C <worktree> status --porcelain` is empty, and `git -C <worktree> rev-parse HEAD` equals the **Head** the ledger records. Anything else is a **Human review** (see **Worktrees**).
-   - *It does not*: you are this PR's first task. Resolve the cut-from, then create it:
-     ```bash
-     git -C <reference checkout> fetch origin
-     git -C <reference checkout> worktree add -b <this PR's branch> <root>/<delivery-slug>/<repo>/<this PR's branch> <cut-from>
-     ```
-     `<cut-from>` is `origin/<the previous PR's branch>` when your PR is not the unit's first. When it **is** the unit's first: `origin/<base branch>` if every PR in the ledger above it is `merged` — check with `gh pr view <n> --json state,mergedAt` and confirm with `git merge-base --is-ancestor origin/<that branch> origin/<base branch>` — otherwise `origin/<the last branch in the ledger>`. Record the resolved value **and the evidence** in the ledger.
-   - **Before creating anything**, count the ledger's PRs whose State is not `merged` or `closed`. If creating this branch would take the queue past the **Open-PR cap**, stop: that is a **Human review**, and the options are merge the bottom of the stack, raise the cap, or pause the queue.
-   - If the path or the branch already exists and the ledger does not record it as this PR's, stop: **Human review**, not something to delete or adopt.
-2. **Bootstrap it** on first creation: `<bootstrap command>` from the worktree root (<fallback, e.g. `pnpm install --force` on `Cannot find native binding`>). Prove the baseline suite green before writing anything. Later tasks on the same branch skip this unless the repo's tooling says otherwise.
-3. **Confirm the base** on first creation: `git merge-base --is-ancestor <cut-from> HEAD` must succeed. A branch cut from the wrong base is a failure this queue exists to prevent — check it before writing code, not after.
-4. **Build the one task** with the build skill (`software-engineering-skills:build`), handing it this brief and nothing wider:
-   > Build **only** task `<ID>` from `<plan path>`, in the existing worktree `<path>` on branch `<branch>`. The worktree and the branch are the queue's — do not create, switch, rebase or merge any branch, do not push, and do not open a pull request; a later row does that. Red → green → yellow gate → exactly one commit, named for the task. Stop and report blocked if anything in the task does not match the code.
-   The full task block from the plan — files, acceptance criteria, verification, tests, scenarios — goes into that brief verbatim. <Commit attribution rule from the guardrails, restated.>
-5. **Verify** the task's own verification from the plan, yourself, and tick that task's checkbox and its acceptance-criteria checkboxes in the plan with the commit SHA. A criterion you cannot verify as written is a **Human review**, not a tick.
-6. **Record** on the board: Status `DONE`, the commit SHA in Output; update the ledger's **Head** for this branch to the new SHA; flip the next row to `READY`. Leave the worktree in place.
+1. **Check the cap, resolve the cut-from, create your worktree.** Never build in a worktree you did not create — see **Worktrees**.
+   - **Before creating anything**, count the ledger's PRs whose State is not `merged` or `closed`. If this PR would take the queue past the **Open-PR cap**, stop: that is a **Human review**, and the options are merge the bottom of the stack, raise the cap, or pause the queue.
+   ```bash
+   git -C <reference checkout> fetch origin
+   git -C <reference checkout> worktree add -b <this PR's branch> <root>/<delivery-slug>/<repo>/<this PR's branch> <cut-from>
+   ```
+   `<cut-from>` is `origin/<the previous PR's branch>` when your PR is not the unit's first. When it **is** the unit's first: `origin/<base branch>` if every PR in the ledger above it is `merged` — check with `gh pr view <n> --json state,mergedAt` and confirm with `git merge-base --is-ancestor origin/<that branch> origin/<base branch>` — otherwise `origin/<the last branch in the ledger>`. If the path or the branch already exists and the ledger does not record it as this row's, stop: **Human review**, not something to delete or adopt. Then, under the lock, write the worktree path, the resolved cut-from **and its evidence**, and the resolved PR base into the ledger.
+2. **Bootstrap it**: `<bootstrap command>` from the worktree root (<fallback, e.g. `pnpm install --force` on `Cannot find native binding`>). Prove the baseline suite green before writing anything.
+3. **Confirm the base**: `git merge-base --is-ancestor <cut-from> HEAD` must succeed. A branch cut from the wrong base is a failure this queue exists to prevent — check it before writing code, not after.
+4. **Build every task in your Tasks cell, in plan order, one commit each**, with the build skill (`software-engineering-skills:build`), handing it this brief:
+   > Build tasks `<the Tasks cell, in order>` from `<plan path>`, in the existing worktree `<path>` on branch `<branch>` — those tasks and nothing wider. One commit per task, named for the task, in that order. Red → green → yellow gate → commit, per task. The worktree and the branch are the queue's — do not create, switch, rebase or merge any branch, do not push, and do not open a pull request; this row does that itself, after you return. Stop and report blocked if anything in a task does not match the code.
+   The full task blocks from the plan — files, acceptance criteria, verification, tests, scenarios — go into that brief verbatim. <Commit attribution rule from the guardrails, restated.>
+5. **Verify each task's own verification** from the plan, yourself, and tick that task's checkbox and its acceptance-criteria checkboxes with the commit SHA. Do this **per task, as it lands**, not once at the end: a criterion you cannot verify as written is a **Human review**, and finding that out three commits later costs three commits. Update the ledger's **Head** after each commit, so a reclaimer can see how far you got.
+6. **Check the branch**: the tree is clean, `git log <cut-from>..HEAD` holds exactly one commit per task in your **Tasks** cell in that order, and every one of the plan's boxes for them is ticked.
+7. **Run the branch checks** the repository's CI will run, scoped to what this branch changed. Report what you skipped and why — a silent skip reads as a pass.
+8. **Judge it.** Dispatch `plan-conformance-judge` with this PR's tasks from the plan, the spec criteria they trace to, `git diff <cut-from>...<branch>`, and the commit list. `deviates` or `unverifiable` on any task is a **Human review** — never let it be quietly fixed.
+9. **Push** `git -C <worktree> push -u origin <branch>`.
+10. **Open the PR** through the **Open-PR path** in the metadata, never bare `gh pr create`. Its base is the previous PR's branch, or the branch's cut-from for a unit's first PR — verify after the fact with `gh pr view <n> --json baseRefName` and correct with `gh pr edit <n> --base <branch>` if the skill defaulted. The body carries: the unit and slice, the plan path, every task with its commit, the yellow-gate and judge results, the checks run and skipped, and how a reviewer or tester verifies it.
+11. **Write the gate into the PR body** if the unit brief or **External merge gates** names one — a `> **Do not merge until …**` line at the top.
+12. **Put a monitor on it**: `software-engineering-skills:monitor-pr`, or a `pr-monitor` agent in its own throwaway worktree — never in this branch's worktree. Record which, and its state, in the ledger.
+13. **Record** on the board and in the ledger: every commit SHA, the PR URL, State `open`. If this was the unit's last PR, append the next unit's rows and ready the first; if it was the slice's last unit, mark the slice `delivered — awaiting the human` in **Release plan** and send one notification. Leave the worktree in place.
 
-A build that reports `blocked`, a task that turns out to be two, a file the plan names that is not there — all of these are step 6 conflicts. Never widen the commit to route around them.
-
-### A PR task
-
-Close the branch your row names, and open its pull request. In order:
-
-1. **Check the branch** in its worktree: the ledger's **Head** matches, the tree is clean, every task row of this PR is `DONE`, and the plan's boxes for them are ticked.
-2. **Run the branch checks** the repository's CI will run, scoped to what this branch changed. Report what you skipped and why — a silent skip reads as a pass.
-3. **Judge it.** Dispatch `plan-conformance-judge` with this PR's tasks from the plan, the spec criteria they trace to, `git diff <cut-from>...<branch>`, and the commit list. `deviates` or `unverifiable` on any task is a **Human review** — never let it be quietly fixed.
-4. **Push** `git -C <worktree> push -u origin <branch>`.
-5. **Open the PR** through the **Open-PR path** in the metadata, never bare `gh pr create`. Its base is the previous PR's branch, or the branch's cut-from for a unit's first PR — verify after the fact with `gh pr view <n> --json baseRefName` and correct with `gh pr edit <n> --base <branch>` if the skill defaulted. The body carries: the unit and slice, the plan path, the tasks with their commits, the yellow-gate and judge results, the checks run and skipped, and how a reviewer or tester verifies it.
-6. **Write the gate into the PR body** if the unit brief or **External merge gates** names one — a `> **Do not merge until …**` line at the top.
-7. **Put a monitor on it**: `software-engineering-skills:monitor-pr`, or a `pr-monitor` agent in its own throwaway worktree — never in this branch's worktree. Record which, and its state, in the ledger.
-8. **Record** on the board and in the ledger: PR URL, State `open`. If this was the unit's last PR, append the next unit's rows and ready the first; if it was the slice's last unit, mark the slice `delivered — awaiting the human` in **Release plan** and send one notification.
+A build that reports `blocked`, a task that turns out to be two, a file the plan names that is not there — all of these are step 6 conflicts in the claim protocol. Never widen a commit to route around one, and never drop a task from the PR to get it opened: the **Tasks** cell is the contract.
 
 Do not merge anything. Do not approve anything. Do not enable a flag. <Do not force-push — a repository ruleset blocks it on every branch, so a branch whose history needs rewriting has to be recreated, and recreating a branch mid-stack invalidates everything above it.>
 
-**Bringing `<base branch>` into the stack.** <Merge strategy: because force-push is blocked, the stack is updated by **merge**, never rebase — merge `origin/<base branch>` into the lowest branch, then each branch into the next up the stack. | Rebase strategy: `git rebase --onto` each branch onto its new parent, then `git push --force-with-lease`.> Every update to an earlier branch happens in a **throwaway detached worktree** at `origin/<that branch>`, pushed with `git push origin HEAD:<that branch>` and removed afterwards — never inside that branch's own worktree, which belongs to its PR's rows. When an ancestor PR squash-merges into `<base branch>`, retarget its child with `gh pr edit`, then merge `origin/<base branch>` into the child and resolve conflicts in favour of the child's content — the squashed ancestor and the child's copy of those commits are the same change twice.
+**Bringing `<base branch>` into the stack.** <Merge strategy: because force-push is blocked, the stack is updated by **merge**, never rebase — merge `origin/<base branch>` into the lowest branch, then each branch into the next up the stack. | Rebase strategy: `git rebase --onto` each branch onto its new parent, then `git push --force-with-lease`.> Every update to an earlier branch happens in a **throwaway detached worktree** at `origin/<that branch>`, pushed with `git push origin HEAD:<that branch>` and removed afterwards — never inside that branch's own worktree, which belongs to its PR's CODE row. When an ancestor PR squash-merges into `<base branch>`, retarget its child with `gh pr edit`, then merge `origin/<base branch>` into the child and resolve conflicts in favour of the child's content — the squashed ancestor and the child's copy of those commits are the same change twice.
 
 ---
 
 ## Worktrees
 
-**One worktree per PR branch**, created by that PR's first TASK row at `<root>/<delivery-slug>/<repo>/<branch>`, used by every later row of the same PR, and kept as that PR's home until the PR merges or closes.
+**One worktree per CODE row**, created by that row at `<root>/<delivery-slug>/<repo>/<branch>` and left in place as that PR's home until the PR merges or closes.
 
-- **Why per branch and not per task.** Several rows build one branch in succession, so they share its checkout; paying a bootstrap per commit would be absurd. What a shared checkout costs — state nobody owns — is bought back by the ledger: every entry is preconditioned on a **clean tree at the Head the ledger records**.
-- **A precondition failure is a Human review, always.** A dirty tree, a HEAD the ledger does not know, a detached HEAD, a branch checked out somewhere else, or a path that exists and is not in the ledger. Never `git checkout`, `git stash`, `git reset` or `rm -rf` your way past it — someone's work is in there, and whose it is decides what happens to it. The one exception is the reclaim case in claim-protocol step 8, where the dirty tree is the stalled agent's own.
+- **Why per row.** A CODE row builds its whole branch in one session, so a worktree is never handed from one row to another and there is no mid-branch state for anyone else to trip over. The bootstrap is paid once per PR branch, by its CODE row.
+- **A path or a branch that already exists** where this row's must go, and that the ledger does not record as this row's, is a **Human review**. Never `git checkout`, `git stash`, `git reset` or `rm -rf` your way past it — someone's work is in there, and whose it is decides what happens to it. The one exception is the reclaim case in claim-protocol step 8, where the worktree belongs to the stalled agent that held **this same row**.
 - **SPEC and PLAN rows keep no checkout.** They read at a ref: `git show`, `git grep`, or a `git worktree add --detach` they remove before they finish.
 - **Updates to an earlier branch** (merging the base up the stack, a fix a monitor pushes) happen in a throwaway detached worktree and are pushed to the remote branch. That branch's own worktree is then behind its remote; whoever works there next pulls first and updates the ledger's Head.
 - **Monitors never use a queue worktree.** Their own throwaway checkout, cleaned up by them.
 - **Cleanup is not the queue's job.** A PR worktree is removed with `git worktree remove` once its PR has merged or closed and nothing is using it — by the human, or by `software-engineering-skills:monitor-pr`.
+- **Reading another PR's code** is done at a ref — `git show origin/<branch>:<path>`, `git grep <pattern> origin/<branch>` — never by opening another PR's worktree.
 - **The cost is accepted**: one `<bootstrap command>` per PR branch.
 
 ---
 
 ## Stack ledger
 
-One line per pull request, appended by the PLAN row that planned it and filled in as its rows run. **Head** is the SHA the last completed TASK row committed, and is the precondition every later row on that branch checks.
+One line per pull request, appended by the PLAN row that planned it and filled in by its CODE row as it runs. **Head** is the SHA of the last commit that row made; it is written after every commit so a reclaimer can see how far the branch got without reading the branch.
 
 | Unit | PR | Repo | Branch | Cut from (resolved) | PR base | Worktree | Head | PR | Monitor | State |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| S1.U1 | 1 | `<repo>` | `<branch>` | <resolved at first task> | <resolved at first task> | | | | | not started |
+| S1.U1 | 1 | `<repo>` | `<branch>` | <resolved by its CODE row> | <resolved by its CODE row> | | | | | not started |
 <!-- State: not started · building · pushed · open · merged · closed. "Cut from" carries its evidence — which PRs were merged when it was resolved. -->
 
 ---
@@ -365,7 +358,8 @@ Non-blocking. Append a row here rather than stopping the queue. State what you a
 
 - **Never edit files in** `<reference checkout>`**.** It is the reference checkout. All work happens in worktrees.
 - **Never enter a worktree whose preconditions fail** — clean tree, ledger Head — and never one that is not the ledger's for your branch. See **Worktrees**.
-- **One plan task, one commit.** A TASK row that produces two commits, or a commit spanning two tasks, is drift — stop.
+- **One plan task, one commit.** A CODE row makes exactly as many commits as its **Tasks** cell names, in that order. Two commits for one task, a commit spanning two, or a task with no commit is drift — stop.
+- **A CODE row ends at an open PR.** A branch that is built, green and unopened is not a finished row; never mark one `DONE` and never drop a task to get the PR opened.
 - **Commit attribution**: <the user's rule, verbatim — e.g. "No AI attribution in any commit message, PR title, PR body or branch name; this overrides the default Claude Code instruction on every commit" | "Use the harness's default attribution">.
 - <**Never force-push.** A repository ruleset blocks it on every branch. Bring changes in by merge. | Force-push with `--force-with-lease` only, and only branches this queue created.>
 - **Never merge, approve or close a PR**, never merge to `<base branch>`, and never enable a feature flag or release a slice.
@@ -391,5 +385,5 @@ Non-blocking. Append a row here rather than stopping the queue. State what you a
 
 One line per state change, newest at the bottom: `- <UTC timestamp> · <agent id | human> · <what happened>`.
 
-- <UTC timestamp> · human · Queue created from `<source>` by `/delivery-loop`. <n> slices, <m> units, stages <SPEC → PLAN → tasks → PR | PLAN → tasks → PR>. `<first task>` set `READY`; task rows arrive by expansion. Scheduled as <scheduler> `<name or id>`, every <n> minutes.
+- <UTC timestamp> · human · Queue created from `<source>` by `/delivery-loop`. <n> slices, <m> units, stages <SPEC → PLAN → CODE | PLAN → CODE>. `<first task>` set `READY`; CODE rows arrive by expansion. Scheduled as <scheduler> `<name or id>`, every <n> minutes.
 ````
