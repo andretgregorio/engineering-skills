@@ -239,6 +239,16 @@ Reference material lives in [`skills/arm-workshop/references/`](skills/arm-works
 
 Story maps organised spatially by activity and priority, sliced into releases by outcome. Backbone (activities), ribs (tasks by detail), walking skeleton (the thinnest end-to-end flow across *all* activities — not an MVP), then release slices. After Jeff Patton, with outcome-based prioritization from Gothelf/Seiden and riskiest-assumption-first from Maurya.
 
+### `/observability-review`
+
+*[Skill README →](skills/observability-review/README.md)*
+
+Assesses **one codebase or service's** observability — its ability to detect a fault before a customer reports it, tell you where to look when a dependency fails, and explain why once found. Dispatches the read-only [`observability-reviewer`](agents/observability-reviewer/README.md) agent, which inventories metrics, logs, traces, errors, profiling, and alerting with file:line evidence against [`knowledge-base/observability-engineering.md`](knowledge-base/observability-engineering.md), then ranks findings Critical / Moderate / Low. Assessment only — it never adds or edits instrumentation.
+
+```
+/observability-review [<path>] [--repo <path>]
+```
+
 ---
 
 ## Design and UX reference skills
@@ -277,6 +287,7 @@ Each agent directory carries its own README with purpose, boundaries, and input/
 | [`clean-coder-reviewer`](agents/clean-coder-reviewer/README.md) | sonnet | Readability, maintainability, expressiveness — *Clean Code*, SOLID, and *The Pragmatic Programmer*, including the nuance that a bigger well-written function beats fragmented micro-functions. Review-only. |
 | [`code-smell-detector`](agents/code-smell-detector/README.md) | sonnet | 10 smell categories and 50+ distinct smells from the [Luzkan catalog](https://github.com/Luzkan/smells) — bloaters, change preventers, couplers, dispensables, OO abusers, obfuscators, and the rest. Detection-only. |
 | [`test-design-reviewer`](agents/test-design-reviewer/README.md) | opus | Scores tests against Dave Farley's properties of good tests, returning a Farley Score. Catches the isolation and repeatability violations behind flaky CI. Worked examples for both a high- and a low-scoring suite live in its `examples/`. |
+| [`observability-reviewer`](agents/observability-reviewer/README.md) | sonnet | Assesses fault detection, triage, and root-cause ability against [`knowledge-base/observability-engineering.md`](knowledge-base/observability-engineering.md) — metrics, logs, traces, errors, profiling, alerting — ranked Critical/Moderate/Low with file:line evidence. Assessment-only. |
 
 ### Requirements
 
