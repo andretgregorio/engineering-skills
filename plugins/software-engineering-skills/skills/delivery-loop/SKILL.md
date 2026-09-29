@@ -1,15 +1,15 @@
 ---
 name: delivery-loop
-description: Turns a design document or story map whose delivery is already sliced into a self-running delivery queue — one markdown queue file that scheduled agents claim tasks from, one at a time, so every slice gets its spec written, then its plan, then every pull request that plan proposes built and opened — one agent, one session, one PR, with every task of that PR as its own commit — unattended and in order. The queue grows itself: each PLAN task expands the board into one row per pull request it planned, so the work is scheduled at the granularity the plan actually chose rather than one the queue guessed in advance. A conflict that needs a decision stops the queue with a Human review block that explains the context and leaves a space for the human's answer; the next tick after the answer resumes the task. It writes the queue, gets the human's approval, schedules the recurring tick, and stops — it never claims a task itself. Use when a sliced design document, story map or release plan is approved and should be taken all the way to open PRs by scheduled agents rather than in one live session, or when the user says "create a delivery loop", "queue this design doc", "deliver this story map", "build these slices overnight", or invokes /delivery-loop.
+description: Turns a design document or story map whose delivery is already sliced into a self-running delivery queue — one markdown queue file that agents claim tasks from, one at a time, so every slice gets its spec written, then its plan, then every pull request that plan proposes built and opened — one agent, one session, one PR, with every task of that PR as its own commit — unattended and in order. The queue grows itself: each PLAN task expands the board into one row per pull request it planned, so the work is scheduled at the granularity the plan actually chose rather than one the queue guessed in advance. A conflict that needs a decision stops the queue with a Human review block that explains the context and leaves a space for the human's answer; the next tick after the answer resumes the task. It writes the queue, gets the human's approval, and starts its driver — a recurring schedule that fires unattended ticks, or one orchestrator session that dispatches a subagent per row and one per PR monitor, and carries Human reviews to the human in chat — chosen by --queue-mode or asked. It never claims a task itself. Use when a sliced design document, story map or release plan is approved and should be taken all the way to open PRs by scheduled or orchestrated agents rather than in one live session, or when the user says "create a delivery loop", "queue this design doc", "deliver this story map", "build these slices overnight", or invokes /delivery-loop.
 role: orchestrator
 user-invocable: true
-argument-hint: "[--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,code|plan,code] [--max-open-prs <n>] [--no-schedule] [--headless]"
+argument-hint: "[--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,code|plan,code] [--max-open-prs <n>] [--queue-mode scheduled|orchestrated] [--no-schedule] [--headless]"
 model: opus
 ---
 
 # Delivery Loop
 
-You are turning **one sliced delivery** — a design document, a story map, a release plan — into a queue that specifies, plans and builds itself. The output is a single markdown file (the queue) and a recurring schedule that starts a fresh agent every few minutes. Each agent reads the queue, claims the one task that is ready, does it, records it, and readies the next. You write the queue and start the schedule; the agents do the work.
+You are turning **one sliced delivery** — a design document, a story map, a release plan — into a queue that specifies, plans and builds itself. The output is a single markdown file (the queue) and a **driver** that starts agents against it — a recurring schedule for an unattended run, or an orchestrator session that dispatches a subagent per row while the human stays in the conversation. Each agent reads the queue, claims the one task that is ready, does it, records it, and readies the next. You write the queue and start the driver; the agents do the work.
 
 The queue is the contract between agents that never meet. Everything a claiming agent needs — what to read, how to claim, where to build, what it may and may not do, and how to stop — is in the file, because the agent has nothing else. A queue that relies on this conversation is broken.
 
@@ -21,7 +21,7 @@ The template is [`references/queue-template.md`](references/queue-template.md). 
 
 ## What this skill does not produce
 
-- **Specs, plans, code or PRs.** The scheduled agents write those, through `software-engineering-skills:specs`, `software-engineering-skills:plan` and `software-engineering-skills:build`. You do not claim the first task to "get it started".
+- **Specs, plans, code or PRs.** The claiming agents write those, through `software-engineering-skills:specs`, `software-engineering-skills:plan` and `software-engineering-skills:build`. You do not claim the first task to "get it started".
 - **The slicing.** The slices, their order and what each one delivers come from the source document. A source with no usable slicing is a `software-engineering-skills:user-story-mapping-workshop` conversation — stop and offer it.
 - **Merges, releases or flag enablement.** The queue ends with every PR of every slice open. Merging, releasing and turning the flag on are human acts; the release plan records what each one is waiting for.
 - **Authority the human did not give.** The queue's standing authorization lists exactly which branches may be pushed, which PRs opened, and **how many PRs may be open at once**. Nothing else outward-facing is licensed by it.
@@ -32,9 +32,11 @@ The template is [`references/queue-template.md`](references/queue-template.md). 
 - **The board grows.** A PLAN task appends the rows for the pull requests it planned, in the same locked edit that marks itself `DONE`. One row per plan PR, carrying that PR's whole task list, nothing invented. See *The board grows itself*.
 - **One worktree per CODE row, created by it and never handed on.** A row that finds a worktree or a branch where its own must go, and the ledger does not record it as this row's, stops rather than adopting it. See *Worktrees*.
 - **Two channels to the human, never confused.** A conflict that makes the work wrong either way is a **Human review**: the queue stops. A question that can proceed on a stated assumption is a **Decisions awaiting the human** row: the queue keeps moving.
+- **`specs`, `plan` and `build` run headless inside the queue.** The queue tells every agent it starts — tick, worker or ad-hoc subagent — to invoke `software-engineering-skills:specs`, `software-engineering-skills:plan` and `software-engineering-skills:build` with `--headless`, and no other skill, and maps each headless outcome to a channel: `assumed (headless)` → a decisions row; a halt → a Human review; a `draft` document → set `approved` by the task; a `build` PR → a draft, covered as one by the standing authorization. Nothing inside a task talks to the human except through the file — even under an orchestrator, which is the bridge, not a participant in the skill's conversation.
 - **The board is the only signal.** A task is done when its row says `DONE`, not when its artifact exists, not when its commit exists. Every board edit happens under the lock, with its event-log line in the same edit.
 - **Read at the ref the branch will be cut from**, not at a working tree. A slice built on top of unmerged slices is specified against their tips, not against the base branch.
-- **The human approves before anything is scheduled.** A running queue pushes branches and opens PRs unattended; starting it is outward-facing. No schedule without an explicit yes.
+- **The human approves before any driver starts.** A running queue pushes branches and opens PRs; starting it is outward-facing whether a schedule or an orchestrator runs it. No driver without an explicit yes.
+- **One driver at a time.** The queue's **Driver** line names the one running.
 - **Never overwrite a queue.** An existing queue file is live state other agents may be mid-edit on. Ask; headless, halt.
 
 ## The unit of work
@@ -129,7 +131,11 @@ The block carries: status (`OPEN` → `ANSWERED` → `APPLIED` | `WITHDRAWN`), w
 
 Raising a block sets the queue's **Status** to `stopped — waiting on HR-<n>` and sends one notification when a notification tool is available.
 
-## Scheduling the tick
+## Driving the queue
+
+Two drivers, one queue — identical in structure to `software-engineering-skills:implementation-loop`'s *Driving the queue*, which explains the choice, the trade-offs, and why the orchestrator never works itself. The claim protocol does not know which driver runs it, so a queue can switch drivers mid-flight: stop one, rewrite the **Driver** line, start the other. `--queue-mode scheduled|orchestrated` decides it; without the flag, ask, and recommend only when the user's own words decide it ("overnight" → scheduled, "I'll be around" → orchestrated).
+
+### Scheduled: the tick
 
 The tick prompt is one line and points at the queue: `Follow the instructions in <queue path>. Read the whole file before acting. If no task is claimable, exit without writing anything.` Write it into the queue's metadata so the schedule can be rebuilt from the file.
 
@@ -138,7 +144,7 @@ The lock is a directory in `/tmp` and the repositories are local checkouts, so t
 | Scheduler | Survives | Use when |
 |---|---|---|
 | **Desktop scheduled task** — `~/.claude/scheduled-tasks/<name>/SKILL.md`, frontmatter `name` and `description`, body the tick prompt | App restarts; fires while the desktop app is running | **Default** — a delivery queue outlives any session |
-| **`CronCreate`**, or the built-in `/loop <n>m <tick prompt>`, in this session | This session only; recurring jobs expire after 7 days | Rarely: a one-slice queue the human will keep a session open for — say both limits out loud |
+| **`CronCreate`**, or the built-in `/loop <n>m <tick prompt>`, in this session | This session only; recurring jobs expire after 7 days | Rarely: a one-slice queue the human will keep a session open for — say both limits out loud, and consider orchestrated instead |
 | **Cloud routine** (`/schedule`) | Everything | **Never** for a local queue: a cloud agent sees neither the queue file, the lock, nor the checkouts |
 
 For the desktop scheduled task: create it through the desktop app where you can. Where you can only write the file, write it and have the human confirm in the app that it is listed and set to the cadence — do not claim a schedule exists because a file does. Either way, tell the human the **permission mode** the tick must run with: it edits files, runs git, pushes and calls `gh` with nobody watching, and a tick stuck on a permission prompt holds a `CLAIMED` row until the reclaim window passes.
@@ -146,6 +152,15 @@ For the desktop scheduled task: create it through the desktop app where you can.
 **Cadence** defaults to 30 minutes. Most ticks are no-ops by design. The **reclaim window** defaults to 6 hours and must exceed the slowest row, or live work gets stolen. **A CODE row is the slow one** — it builds every task of a PR and opens it — so raise the window for a queue whose PRs carry many tasks, and prefer a heartbeat (the row rewrites its own `Claimed` timestamp hourly) to a window guessed generously.
 
 **Ending.** The agent that finishes the last row sets the queue's Status to `complete` and logs that the schedule can be removed; later ticks see `complete` and exit. It removes the schedule only when it owns it — a `CronCreate` job in its own session. A desktop scheduled task is removed by the human.
+
+### Orchestrated: one session, many subagents
+
+The orchestrator is a dispatcher and a bridge, never a worker: it dispatches one worker per row the moment the previous returns, reads the board rather than the worker's reply, marks a dead worker's claim `abandoned` so it is reclaimed at once, brings every Human review to the human in chat and writes their answer into the block verbatim, and routes the human's own requests — progress questions from the file, changes to unbuilt work as logged edits, work on an open PR to an ad-hoc subagent in a throwaway worktree, anything else to an ordinary subagent kept away from the queue. Its whole contract is written into the queue's **Driving this queue** section, so a fresh session started with the **Orchestrator prompt** can take over. Workers are Agent-tool subagents only when preflight proved a subagent can dispatch its own — a CODE row runs `software-engineering-skills:build` and the conformance judge — and headless `claude -p` sessions otherwise.
+
+Two things are specific to a delivery queue:
+
+- **Monitors run in subagents, never in the orchestrator.** A worker that waited on its own PR would hold the queue, so under this driver a CODE row sets its ledger **Monitor** cell to `requested`. Before dispatching the next worker, the orchestrator dispatches a background monitor subagent whose only job is to run `software-engineering-skills:monitor-pr` on that PR. The orchestrator never runs `monitor-pr` itself and never substitutes another monitor. If the subagent cannot run the skill, the cell reads `for the human — <reason>`, the human is told in one line, and monitoring that PR is theirs. Monitor subagents are bounded by the open-PR cap, not by the ad-hoc limit.
+- **Releases reach the human in chat.** When a slice is marked `delivered — awaiting the human`, the orchestrator says so with the slice's release gate, rather than relying on a notification — and keeps dispatching the next slice, exactly as a scheduled queue would.
 
 ## Steps
 
@@ -164,9 +179,11 @@ Turn each slice into an ordered list of units, each one small enough for a singl
 
 Present the slice → unit table to the human and get it confirmed. This is the one structural decision the source does not make for you, and every row on the board descends from it. `--slices` narrows which slices are queued; the rest stay in the source, unqueued, and the report says so.
 
-### 3. Decide the stages
+### 3. Decide the stages and the driver
 
 `spec,plan,code` by default. `plan,code` only when an approved spec already exists per unit — name the files. `--stages` overrides. Ask when it is not clear-cut: a queue that skips SPEC on a source that never had one plans from guesses.
+
+Scheduled or orchestrated: `--queue-mode` decides it; without the flag, ask (see *Driving the queue*). Both questions can go in one ask. The answer decides what step 4 checks and what step 8 starts.
 
 ### 4. Preflight (hard gate)
 
@@ -181,7 +198,9 @@ Establish every item with evidence, per repository. The queue's metadata, worktr
 - [ ] The **skills and agents** the rows invoke exist: `software-engineering-skills:specs`, `software-engineering-skills:plan`, `software-engineering-skills:build`, the open-PR path, and what `build` dispatches (`tdd-developer`, the yellow-gate reviewers, `plan-conformance-judge`). A missing one is a halt, not a substitution.
 - [ ] **No branch-name collisions** for the first unit's PRs, and no path under the worktree root taken. Later units' names are checked at expansion time, not now — they do not exist yet.
 - [ ] The **release gates**: per slice, what a human must do to release it, and who that human is.
-- [ ] The **scheduler** available on this machine, and the **lock path** — `/tmp/<ticket-slug>-delivery.lock`, unused.
+- [ ] The **lock path** — `/tmp/<ticket-slug>-delivery.lock`, unused.
+- [ ] *Scheduled*: the **scheduler** available on this machine.
+- [ ] *Orchestrated*: the **worker launch**. Probe whether a subagent can dispatch a subagent of its own — dispatch one whose only job is to dispatch a trivial second one and report whether it could. Yes → Agent-tool workers. No → headless `claude -p` workers: confirm `claude` is on `PATH` and name the permission mode they run with. Never pick the subagent launch on assumption: a worker that cannot dispatch fails inside `software-engineering-skills:build`, halfway through a pull request.
 
 Report it as a short table.
 
@@ -211,23 +230,33 @@ Hand the queue, the source and repository access to an independent read-only sub
 - [ ] **Human review**: the section, its answer procedure and its template are present; the claim protocol resumes an `ANSWERED` block; the test separating it from the decisions table is stated.
 - [ ] **Authorization**: every outward-facing act a row performs is on the standing authorization list — including the cap — and nothing else is.
 - [ ] **Release plan**: every slice has an outcome, a guardrail and a release gate, and nothing in the queue lets an agent clear one.
+- [ ] **Driver**: the **Driver** line names one driver; the **Driving this queue** section is present with both drivers; for an orchestrated queue, an orchestrator given only the **Orchestrator prompt** could run its loop, hand a `requested` monitor to a subagent (and to the human when the subagent cannot run it), relay a Human review, and route each kind of request without this conversation, and the claim protocol reclaims an `abandoned` row at once.
+- [ ] **Headless**: every `specs`, `plan` and `build` invocation in the queue carries `--headless`, no other skill invocation does, the guardrail maps each headless outcome (assumption, halt, draft document, draft PR) to its channel, and the standing authorization covers PRs as drafts where `build` opens them.
 - [ ] **Guardrails** match the user's and repositories' rules, attribution verbatim.
 
 Then prove the lock yourself: run the protocol's step 1 and step 3 against the real lock path, and confirm it acquires, writes a holder, and releases. Fix blockers and re-run only the failing items (max 2 iterations; then surface what remains and ask).
 
-### 8. Present, approve, schedule (hard stop)
+### 8. Present, approve, start the driver (hard stop)
 
-Show the human the slice → unit table, the board as it stands, the release plan, the standing authorization with its cap, the stages, the cadence and the scheduler — and ask. **Only on an explicit yes**: set the queue's **Status** to `running`, create the schedule, write the scheduler's name or id into the metadata and the event log, and tell the human the permission mode the tick needs. `--no-schedule`: set `running` only if they ask, print the tick prompt, and stop.
+Show the human the slice → unit table, the board as it stands, the release plan, the standing authorization with its cap, the stages and the driver — the cadence and scheduler, or the worker launch — and ask. **Only on an explicit yes**, set the queue's **Status** to `running`, and then:
 
-### 9. Report and stop
+- *Scheduled*: create the schedule, write the scheduler's name or id into the **Driver** line and the event log, and tell the human the permission mode the tick needs.
+- *Orchestrated*: write `orchestrated — session <this session's name or id>` into the **Driver** line and the event log, and tell the human the permission mode workers run with and that permission prompts will reach them here.
 
-Print the report below and stop. Do not run a tick. Do not claim the first row.
+`--no-schedule`: start no driver; set `running` only if they ask, print the tick prompt or the orchestrator prompt, and stop.
+
+### 9. Report, then stop or orchestrate
+
+Print the report below.
+
+- *Scheduled*: stop. Do not run a tick. Do not claim the first row.
+- *Orchestrated*: this session becomes the orchestrator. Say so in one line, then follow the queue's **Driving this queue → Orchestrated** section from its first step — read from the file, not from what you remember writing, so this session runs the queue exactly as a fresh one would. You still never claim a row.
 
 ## Headless mode
 
 The run is headless when `--headless` is passed or there is provably no human in the loop.
 
-- The queue is written with **Status** `draft` and **never scheduled** — starting unattended agents that push and open PRs is exactly the approval a headless run cannot give.
+- The queue is written with **Status** `draft` and **no driver is started** — starting agents that push and open PRs is exactly the approval a headless run cannot give. `--queue-mode orchestrated` is recorded in the **Driver** line but has no human to bridge to; the report says a human starts it with the orchestrator prompt. With no flag, the driver is recorded as `scheduled`, `unresolved (headless)`.
 - **The slice → unit split still needs confirming**, and cannot be. Derive it, mark it `unconfirmed (headless)` in the queue and the report, and say that the first SPEC row must not be claimed until a human has read it.
 - Preflight items that need a human (an unknowable force-push policy, the open-PR cap, a release gate's owner) are recorded as `unresolved (headless)`, not assumed.
 - The quality gate still runs, and its verdicts are still recorded.
@@ -236,16 +265,16 @@ The run is headless when `--headless` is passed or there is provably no human in
 ## Final report template
 
 ````markdown
-# Delivery loop: <Feature> — <scheduled | written, not scheduled>
+# Delivery loop: <Feature> — <scheduled | orchestrated | written, no driver started>
 
 **Queue**: <path>   **Source**: <path>   **Stages**: SPEC → PLAN → CODE | PLAN → CODE
-**Scheduler**: <desktop scheduled task `<name>` | CronCreate `<id>` (session-only, expires <date>) | none>   **Cadence**: every <n> min   **Reclaim after**: <n> h   **Open-PR cap**: <n>
+**Driver**: <scheduled — desktop scheduled task `<name>` | CronCreate `<id>` (session-only, expires <date>), every <n> min | orchestrated — this session; workers are <Agent-tool subagents | headless `claude -p` sessions> | none>   **Reclaim after**: <n> h (scheduled) · at once when the orchestrator marks a claim abandoned   **Open-PR cap**: <n>
 
 | Slice | Outcome / KPI | Units | Rows now | Release gate |
 |---|---|---|---|---|
 <!-- "Rows now" is what exists before any expansion — 2 per unit with SPEC, 1 without. -->
 
-**First claimable**: `<task>` — expect the first claim within <n> minutes.
+**First claimable**: `<task>` — <expect the first claim within <n> minutes | the first worker is dispatched now>.
 **The board grows**: each PLAN row appends one row per pull request it plans, each carrying that PR's whole task list. Expect ~<n> rows per unit.
 **Worktrees**: one per CODE row at `<root>/<delivery-slug>/<repo>/<branch>`; none are removed by the queue.
 **Standing authorization**: <the list, one line, including the cap>
@@ -253,13 +282,13 @@ The run is headless when `--headless` is passed or there is provably no human in
 **Open questions carried in**: <Q ids, one line each — or none>
 
 **For the human**
-1. Answer Human review blocks in the queue: write under **Human answer**, set Status to `ANSWERED`. Nothing else to touch.
-2. The tick must run with <permission mode>; <confirm the scheduled task is listed and set to every <n> minutes — if it was written as a file>.
+1. <Scheduled: answer Human review blocks in the queue — write under **Human answer**, set Status to `ANSWERED`, nothing else to touch. | Orchestrated: Human reviews and delivered slices come to you here; answer in chat. Ask for anything else here too — progress, a fix on an open PR, a pause — and it is routed to a subagent without colliding with the queue.>
+2. <The tick must run with <permission mode>; confirm the scheduled task is listed and set to every <n> minutes — if it was written as a file. | Workers run with <permission mode>; prompts they raise reach you in this session. Closing this session stops the queue where it stands; resume with the orchestrator prompt in the queue's metadata.>
 3. **Merge as you go.** The queue stops at <n> open PRs. Reviewing and merging the bottom of the stack is what keeps it moving, and what keeps the next slice cut from `<base branch>` instead of from a tower of unmerged branches.
 4. Releasing a delivered slice is yours: <the release gates, one line each>.
-5. When Status reads `complete`: merge what is left, remove the schedule and the worktrees.
+5. When Status reads `complete`: merge what is left, remove the schedule if there is one, and the worktrees.
 ````
 
 ## Running this by hand (no skill)
 
-The artifact matters, not the automation. A human doing this manually writes one file that lists the release slices in order and breaks each into the smallest pieces that could be specified on their own; marks exactly one step ready; and adds a rule saying that the person who writes a plan must also write that plan's pull requests onto the board — one line each, listing the tasks it carries — because nobody could have listed them earlier. It tells every agent to make its own directory for the branch it is building, and to refuse to touch one somebody else left behind; it caps how many pull requests may be open at once so the work cannot outrun whoever reviews it; it gives the agents one place to write a question that can wait and another, louder place for one that cannot — with the context written out and an empty space for the answer; and it schedules a prompt that says *follow this file*. The discipline that carries the value is that the board is grown by the document that knows the answer rather than guessed up front; that one pull request is one sitting, so whoever writes its first commit is the one who opens it; and that when an agent meets something it must not decide, it stops and writes the question well enough to be answered from a phone.
+The artifact matters, not the automation. A human doing this manually writes one file that lists the release slices in order and breaks each into the smallest pieces that could be specified on their own; marks exactly one step ready; and adds a rule saying that the person who writes a plan must also write that plan's pull requests onto the board — one line each, listing the tasks it carries — because nobody could have listed them earlier. It tells every agent to make its own directory for the branch it is building, and to refuse to touch one somebody else left behind; it caps how many pull requests may be open at once so the work cannot outrun whoever reviews it; it gives the agents one place to write a question that can wait and another, louder place for one that cannot — with the context written out and an empty space for the answer; and it either schedules a prompt that says *follow this file*, or sits one person — the orchestrator — beside the file to hand each step to a fresh pair of hands the moment the last one finishes, carry questions to the human and answers back, and route the human's own requests so they never trip over the queue's work. The discipline that carries the value is that the board is grown by the document that knows the answer rather than guessed up front; that one pull request is one sitting, so whoever writes its first commit is the one who opens it; and that when an agent meets something it must not decide, it stops and writes the question well enough to be answered from a phone.

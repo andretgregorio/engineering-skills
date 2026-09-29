@@ -3,7 +3,7 @@
 One decision: **which loop runs this document.** Then it hands over and stops.
 
 ```
-/loop [<path to a design doc, story map or plan>] [--ticket <ID>] [<flags passed through>]
+/loop [<path to a design doc, story map or plan>] [--ticket <ID>] [--queue-mode scheduled|orchestrated] [<flags passed through>]
 ```
 
 > **Not the built-in `/loop`.** Claude Code ships a `/loop` that runs a prompt on a recurring interval. This one is `software-engineering-skills:loop` and it takes a document. An invocation whose first argument is an interval (`5m`) or a slash command belongs to the built-in, and this skill says so and stops.
@@ -15,7 +15,14 @@ One decision: **which loop runs this document.** Then it hands over and stops.
 | **Delivery loop** | Design doc, story map or release plan with a **sliced** delivery | Per unit: SPEC → PLAN → one row per planned PR, each building that PR's tasks and opening it. The board grows as plans are written | [`delivery-loop`](../delivery-loop/README.md) |
 | **Implementation loop** | An **approved plan** that orders its PRs | Per PR: SPEC → PLAN → CODE, or CODE-only when the plan is already buildable | [`implementation-loop`](../implementation-loop/README.md) |
 
-Both write a queue file, take the human's approval, schedule a recurring tick, and stop. The wrong choice is expensive in both directions: the implementation loop on a sliced design doc builds from guesses, and the delivery loop on a finished plan re-specifies work that was already planned.
+Both write a queue file, take the human's approval, and start a driver for it:
+
+| `--queue-mode` | Driver | Suits |
+|---|---|---|
+| `scheduled` | A recurring tick starts a fresh agent every few minutes; Human reviews arrive as notifications and are answered in the file | Overnight, multi-day, the human away |
+| `orchestrated` | One orchestrator session dispatches a subagent per task, relays Human reviews to the human in chat, and routes the human's own requests to subagents | The human around and wanting to steer |
+
+The flag is passed through; without it, the chosen loop asks. The queue file is the same under both, so a queue can switch drivers mid-flight. The wrong choice is expensive in both directions: the implementation loop on a sliced design doc builds from guesses, and the delivery loop on a finished plan re-specifies work that was already planned.
 
 ## How it decides
 
@@ -38,7 +45,7 @@ From the document's **content**, never its filename — `plan.md` is routinely a
 |---|---|
 | Reads the document and names the evidence for its route | Route on a filename, or on which skill wrote the file |
 | Asks one question when two readings are plausible | Break a tie itself |
-| Passes every flag through verbatim | Drop an unsupported flag silently |
+| Passes every flag through verbatim, `--queue-mode` included | Drop an unsupported flag silently, or ask the queue-mode question itself |
 | Stops and names the missing upstream step | Route a draft, a spec, or an unsliced design doc |
 | Invokes exactly one loop, once | Write a queue, schedule a tick, or claim a task |
 

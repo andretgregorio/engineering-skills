@@ -1,6 +1,6 @@
 # Delivery queue template
 
-The file `/delivery-loop` writes. Everything between the two outer fences below is the queue. `<…>` are placeholders the skill fills, `<a | b>` is a choice the skill makes, and `<!-- … -->` comments are instructions to the skill — every one of them is gone before the queue is scheduled. Sections marked *(no-SPEC queues: drop)* are removed when the queue runs `--stages plan,code`. The fenced **Human review** template is the one fence that stays: it is what agents copy.
+The file `/delivery-loop` writes. Everything between the two outer fences below is the queue. `<…>` are placeholders the skill fills, `<a | b>` is a choice the skill makes, and `<!-- … -->` comments are instructions to the skill — every one of them is gone before the queue's driver starts. Sections marked *(no-SPEC queues: drop)* are removed when the queue runs `--stages plan,code`. The fenced **Human review** template is the one fence that stays: it is what agents copy.
 
 The document is written for its readers in this order: a claiming agent with no memory of this conversation, the human who answers its questions, and whoever reads the ledger after the release has shipped.
 
@@ -10,14 +10,15 @@ The document is written for its readers in this order: a claiming agent with no 
 **Ticket**: <ID · link | none>
 **Source**: `<file>` (sibling in this directory) — the binding slicing, ordering and scope. This queue schedules it and records what happened; it never re-decides it
 **Created**: <YYYY-MM-DD>
-**Status**: <draft | running | stopped — waiting on HR-<n> | complete>
+**Status**: <draft | running | paused | stopped — waiting on HR-<n> | complete>
 **Repository**: `<reference checkout>` (reference checkout, `<base branch>`, never edited) · remote `<remote url>` <!-- one line per repository the delivery touches -->
 **Worktree root**: `<root>/<delivery-slug>/` — one worktree per PR branch, at `<root>/<delivery-slug>/<repo>/<branch>`; see **Worktrees**
 **Stack update strategy**: <merge | rebase> — <evidence: the ruleset, branch protection setting or repo rule that decided it>
 **Open-PR path**: <the repo's own `<skill>` skill | `software-engineering-skills:open-pr`>
 **Open-PR cap**: <n> unmerged PRs at once. A CODE row that would exceed it stops the queue — see **Standing authorization**
-**Cadence**: one agent attempts a claim every <n> minutes, via <scheduler> `<name or id>`. At most one task is claimable at any moment, so most ticks are a no-op and should exit silently
+**Driver**: <scheduled — one agent attempts a claim every <n> minutes, via <scheduler> `<name or id>`. At most one task is claimable at any moment, so most ticks are a no-op and should exit silently | orchestrated — session `<name or id>` dispatches one worker per row, starts the PR monitors, and relays Human reviews to the human in chat>. One driver at a time; see **Driving this queue**
 **Tick prompt**: `Follow the instructions in <queue path>. Read the whole file before acting. If no task is claimable, exit without writing anything.`
+**Orchestrator prompt**: `Orchestrate the queue at <queue path>. Read the whole file, then follow its Driving this queue → Orchestrated section. Never claim a task yourself.`
 **Lock**: `/tmp/<ticket-slug>-delivery.lock`
 **Queue file**: `<absolute path>` — this file, the single source of truth for what is done and what is next
 
@@ -35,7 +36,7 @@ The queue is serial by construction: at most one row is ever `READY`. An agent t
 
 The queue never merges and never releases. It stops at open pull requests; **Release plan** records what each slice is waiting on.
 
-When a task meets a conflict it cannot resolve without a decision, it writes a **Human review** block, the queue stops, and it stays stopped until the human answers in that block. The next tick after the answer resumes the task.
+When a task meets a conflict it cannot resolve without a decision, it writes a **Human review** block, the queue stops, and it stays stopped until the human answers in that block. The next claiming agent after the answer resumes the task.
 
 ## Reading order for a claiming agent
 
@@ -58,6 +59,54 @@ The human approved this queue on <date>. That approval is the standing authoriza
 - <anything else the human explicitly authorized — or delete this line>
 
 When a skill you invoke pauses to ask a human for input it could take from this queue — a PR body's "why", a final preview — answer it from the unit brief and the plan, proceed on this authorization, and say so in the plan's Build Log. Anything outward-facing not on this list is a **Human review**.
+
+## Driving this queue
+
+*A claiming agent can skip this section: it is for whatever starts claiming agents.* The **Claim protocol** below is the same under either driver. A driver decides only **when** a claiming agent starts and **how the human hears** about a Human review. Exactly one driver runs at a time, and the **Driver** line names it. To switch, stop the running one, rewrite the **Driver** line, append an event-log line, then start the other.
+
+<!-- Keep both subsections whichever driver was chosen: the queue can switch drivers mid-flight. -->
+
+### Scheduled
+
+<scheduler> `<name or id>` starts a fresh agent every <n> minutes with the **Tick prompt**. Most ticks find nothing claimable and exit. The human hears about a Human review from a notification and answers it in this file.
+
+### Orchestrated
+
+One long-lived session, the **orchestrator**, is started with the **Orchestrator prompt** and runs the queue with the human beside it. It is a dispatcher and a bridge. It starts workers, reads the board, carries Human reviews to the human in chat and their answers back into this file, and hands the human's own requests to subagents. **It never claims a row and never does a row's work.** It keeps its context small so it can run for days. This file is the state, not the orchestrator's memory: after a compaction or a restart, it re-reads this file and carries on.
+
+**Workers.** A worker is one claiming agent, started as <an Agent-tool subagent (`subagent_type: "general-purpose"`, in the background) | a background headless session: `claude -p "<Tick prompt> <worker suffix>" --permission-mode <mode>` from the orchestrator's shell>. <!-- preflight decided this: a subagent only when this harness was proven to let a subagent dispatch its own, because the build skill dispatches subagents --> Its prompt is the **Tick prompt** plus this suffix: `When you finish (done, stopped, or nothing to claim), reply with the row you claimed, its Status now, and any HR-<n> you raised. Start no agent that is meant to outlive you.`
+
+**The loop**
+
+1. **Start.** Read this file in full. If Status is `draft`, stop and tell the human the queue is not approved. If it is `complete`, report and end. If it is `paused`, ask the human whether to resume. A `CLAIMED` row with no worker of yours behind it belongs to a driver that is gone. Show it to the human, and on their yes mark it abandoned (loop step 5). Then dispatch one worker.
+2. **Run one queue worker at a time.** Dispatch the next only after the previous one has returned. The queue is serial, so a second worker would find nothing to claim.
+3. **When a worker returns, read the board, not the worker's reply.** Tell the human in one line which row moved, its new Status, and the artifact or PR it produced. Then act on what the board shows:
+   - a `READY` row: dispatch the next worker at once. There is no cadence to wait for.
+   - Status `stopped — waiting on HR-<n>` with the block `OPEN`: bring it to the human (below), and dispatch nothing until it is answered.
+   - a row still `CLAIMED`: the worker ended without finishing it. Mark it abandoned, tell the human what the ledger says was left in place, and dispatch one worker to reclaim it. If the same row is abandoned a second time, do not retry: tell the human and wait.
+   - a **Monitor** cell in the **Stack ledger** reading `requested`: dispatch a monitor subagent for that PR (see **Monitors** below). Do this before dispatching the next worker.
+   - Status `complete`: report the final **Stack ledger** and stop dispatching.
+4. **Between workers, and while one runs,** take the human's requests (below).
+5. **To mark a claim abandoned**, take the lock, rewrite the row's **Claimed by** to `abandoned — <old agent id>`, leave its Status `CLAIMED`, and append an event-log line. The claim protocol reclaims such a row at once, with the same continue-from-partial-output rules as a stalled one.
+
+**Bringing a Human review to the human.** Present the block in chat so they can decide without opening this file: the conflict with its evidence, why it cannot proceed on an assumption, and the options with the recommendation. Then ask. They may answer in chat or by editing this file, so re-read the block on every message they send while it is `OPEN`. When they answer in chat, re-read the block first, in case they also edited it. Write their answer **verbatim** under **Human answer**, fill **Answered by** with `<human> via orchestrator · <date>`, set the block to `ANSWERED`, append an event-log line, and dispatch a worker. It resumes the row through the claim protocol. Never answer a block yourself, never turn an answer into something the human did not say, and never take the recommended option because they were slow to reply.
+
+**Requests from the human.** Each request goes one of four ways. Decide which before acting:
+
+| Request | What the orchestrator does |
+| --- | --- |
+| A question about progress | Answers from this file. No subagent |
+| A change to what the queue has not built yet: amend a brief, skip or reorder a PR, pause, resume, change the open-PR cap | Edits the human-owned section on the human's explicit word, under the lock, logged as `human via orchestrator`. Pause sets Status to `paused`. Resume sets it to `running` and dispatches a worker. A row that is already `DONE` is not re-opened: a change to what it produced is the next kind of request |
+| Work on something the queue already produced: a change the human wants in a finished PR, a review comment, a red check, an update up the stack | Dispatches an ad-hoc subagent, briefed with this file's path and its **Guardrails**, **Worktrees** and **Standing authorization**. It works in a throwaway detached worktree. It never works in a row's own worktree, and never on the branch of the row that is `CLAIMED` now. When it pushes, it appends an event-log line under the lock |
+| Anything unrelated to this queue | Dispatches an ordinary subagent, told not to touch this file, the lock, or anything under the **Worktree root** |
+
+Ad-hoc subagents may run alongside the queue worker, at most <2> at once, and never two on the same branch. The **Standing authorization** covers them exactly as it covers workers. For anything outward-facing beyond it, the orchestrator asks the human in chat first and records the yes in the event log.
+
+**Monitors.** A worker does not monitor its own PR: `software-engineering-skills:monitor-pr` waits until the PR merges, and a worker that waited would hold the queue for as long. Under this driver, step 12 of **A CODE task** sets the ledger's **Monitor** cell to `requested` instead. The orchestrator then dispatches one background **monitor subagent** per requested PR. Its only job is to run `software-engineering-skills:monitor-pr` on that PR, in its own throwaway worktree. The orchestrator writes `monitor-pr (subagent <id>)` into the cell under the lock. **The orchestrator never runs `monitor-pr` itself**, and never substitutes a `pr-monitor` agent or any other workaround. If the subagent reports that it cannot run the skill, the orchestrator sets the cell to `for the human — <the reason, as the subagent gave it>`, tells the human in one line, and moves on. Keeping that PR monitored is then the human's job. Monitor subagents do not count toward the ad-hoc limit: there is one per open PR, and the **Open-PR cap** bounds them. What a monitor cannot settle on its own, the orchestrator brings to the human in chat.
+
+**The orchestrator never** claims a row, builds, writes a spec or a plan, expands the board, runs `software-engineering-skills:monitor-pr`, answers a Human review for the human, changes a row's Status, merges, approves, or starts a second driver. Marking a claim abandoned changes **Claimed by**, not Status.
+
+**Lifetime.** The orchestrator lives as long as its session. Closing the session stops the queue where it stands, and nothing advances until a driver runs again. A worker that dies with the session leaves a `CLAIMED` row. The next orchestrator marks it abandoned, or a scheduled driver reclaims it after the reclaim window.
 
 ---
 
@@ -87,11 +136,11 @@ printf '%s %s\n' "$AGENT" "$(date -u +%FT%TZ)" > "$LOCK/holder"
 
 ### 2 · Claim a row
 
-Under the lock, read the file's **Status** line first: `complete` means release and exit. Otherwise take the first claimable row, looking in this order:
+Under the lock, read the file's **Status** line first: `complete` or `paused` means release and exit. Otherwise take the first claimable row, looking in this order:
 
 1. The one row in **The board** whose Status is `READY`.
 2. A `NEEDS-HUMAN` row whose **Human review** block has Status `ANSWERED` — you are **resuming** it; see step 7.
-3. A `CLAIMED` row older than <6> hours — you are **reclaiming** it; see step 8.
+3. A `CLAIMED` row older than <6> hours, or one whose **Claimed by** reads `abandoned — <id>` (an orchestrator saw its worker die) — you are **reclaiming** it; see step 8.
 
 If none exists, release the lock and exit without writing anything — including without writing to the event log. If one does, rewrite that row's Status to `CLAIMED`, put your agent id in **Claimed by**, and put the current UTC timestamp in **Claimed**. Then re-read the row and confirm it names your agent id; if it names someone else, you lost the race — release and exit.
 
@@ -117,7 +166,7 @@ A PLAN row has no successors to unblock until it creates them. In the **same loc
 
 Stop, and hand the decision to the human — but only when proceeding either way would produce work that is **wrong rather than merely debatable**: a contradiction between the source and the code that a binding decision does not settle, a unit that cannot be specified inside its slice boundary, a repository state you must not act on unilaterally (a dirty worktree, a HEAD the ledger does not record, a branch name already taken, commits that are not this queue's), or an outward-facing act the **Standing authorization** does not cover — including a PR that would exceed the open-PR cap. An ordinary open question is not this: record it under **Decisions awaiting the human**, state the assumption you proceeded on, and carry on.
 
-To stop: re-acquire the lock and, in one edit, append a block to **Human review** copied from its template and filled in completely; set your row's Status to `NEEDS-HUMAN` with `HR-<n>` and a one-line reason in **Output**; set this file's **Status** line to `stopped — waiting on HR-<n>`; append an event-log line. Release. Leave every artifact you produced in place — files, worktree, branch, commits, uncommitted changes — and name all of them in the block. Then send one notification if a notification tool is available: `<TICKET> delivery queue stopped: HR-<n> needs your decision (<task>)`.
+To stop: re-acquire the lock and, in one edit, append a block to **Human review** copied from its template and filled in completely; set your row's Status to `NEEDS-HUMAN` with `HR-<n>` and a one-line reason in **Output**; set this file's **Status** line to `stopped — waiting on HR-<n>`; append an event-log line. Release. Leave every artifact you produced in place — files, worktree, branch, commits, uncommitted changes — and name all of them in the block. Then, under a scheduled driver, send one notification if a notification tool is available (an orchestrator relays the block itself): `<TICKET> delivery queue stopped: HR-<n> needs your decision (<task>)`.
 
 `NEEDS-HUMAN` stops the queue on purpose: no successor becomes `READY`, and only the human's answer restarts it.
 
@@ -131,7 +180,7 @@ When the task completes, the step-4 edit also sets the block's Status to `APPLIE
 
 ### 8 · Reclaiming a stalled task
 
-A row `CLAIMED` for more than **<6> hours** with no completion may be reclaimed by any agent, under the lock. Before resetting it, look for partial output — a spec or plan file already on disk, a worktree at the path the **Stack ledger** records, a commit on the branch, an open PR — and continue from it rather than starting over.
+A row `CLAIMED` for more than **<6> hours** with no completion, or marked `abandoned — <id>` by an orchestrator, may be reclaimed by any agent, under the lock. Before resetting it, look for partial output — a spec or plan file already on disk, a worktree at the path the **Stack ledger** records, a commit on the branch, an open PR — and continue from it rather than starting over.
 
 - A **PLAN** row that already wrote its plan file but did not expand the board: read the plan and run the expansion.
 - A **CODE** row whose worktree exists: it is the stalled agent's, and it held this same row, so it is yours to continue in. Read `git -C <worktree> log --oneline <cut-from>..HEAD` against your row's **Tasks** cell to see which plan tasks already landed, and resume at the first one that did not. Never rebuild a task that is already committed, and never start the branch over.
@@ -159,7 +208,7 @@ Kinds: `SPEC` · `PLAN` · `CODE` (one pull request: every task it holds as its 
 - `<n>.<m>-SPEC` → `<n>.<m>-PLAN`.
 - `<n>.<m>-PLAN` → **expands** (see **A PLAN task**) and readies the first row it appended.
 - A `CODE` row → the next `CODE` row of the same unit; when it was the unit's last PR, it appends the next unit's <`SPEC` | `PLAN`> and `PLAN` rows and readies the first of them.
-- The last `CODE` row of the last unit of the last slice readies nothing: set this file's **Status** line to `complete`, mark the slice delivered in **Release plan**, and say in the event log that the schedule `<name or id>` can be removed.
+- The last `CODE` row of the last unit of the last slice readies nothing: set this file's **Status** line to `complete`, mark the slice delivered in **Release plan**, and say in the event log that the driver can be stopped (<the schedule `<name or id>` can be removed | the orchestrator stops dispatching>).
 
 ---
 
@@ -167,7 +216,7 @@ Kinds: `SPEC` · `PLAN` · `CODE` (one pull request: every task it holds as its 
 
 ### A SPEC task *(no-SPEC queues: drop)*
 
-Write `spec-S<n>-U<m>-<slug>.md` into this directory using the specs skill (`software-engineering-skills:specs`), for the scope of **that unit only** as its brief defines it. Copy the shape of `<house spec>`.
+Write `spec-S<n>-U<m>-<slug>.md` into this directory using the specs skill (`software-engineering-skills:specs --headless`), for the scope of **that unit only** as its brief defines it. Copy the shape of `<house spec>`.
 
 **Read the code at the ref this unit's first branch will be cut from**, not at the base branch and not at a working tree: that is `origin/<base branch>` when every earlier unit's PRs are merged, and `origin/<last branch in the Stack ledger>` otherwise. Resolve it the same way a CODE row does (see **A CODE task**, step 1), state the ref and its SHA in the spec's metadata, and read through `git show <ref>:<path>` / `git grep <pattern> <ref>` or a throwaway `git worktree add --detach` you remove before you finish. Never read from another row's worktree: it can hold uncommitted work that is on no branch.
 
@@ -177,7 +226,7 @@ Set the spec's own **Status** line to `approved` — there is no separate approv
 
 ### A PLAN task
 
-Write `plan-S<n>-U<m>-<slug>.md` beside the spec using the plan skill (`software-engineering-skills:plan`), reading <the spec | `<the existing spec path from the unit brief>`> as its input. Copy the shape of `<house plan>`. Read code at a ref, as a SPEC task does. Keep the PR stack shallow — <2> PRs is the expected shape for a unit this size, and the ceiling below is not a target.
+Write `plan-S<n>-U<m>-<slug>.md` beside the spec using the plan skill (`software-engineering-skills:plan --headless`), reading <the spec | `<the existing spec path from the unit brief>`> as its input. Copy the shape of `<house plan>`. Read code at a ref, as a SPEC task does. Keep the PR stack shallow — <2> PRs is the expected shape for a unit this size, and the ceiling below is not a target.
 
 The plan's metadata carries `**Repository**` and `**Base branch**`; its `## PR Stack` table carries a branch name per PR. **Do not write worktree paths or resolved bases into the plan** — those are the ledger's, resolved when each branch is actually created.
 
@@ -195,7 +244,7 @@ Three rules keep the expansion honest:
 - **A branch name in the plan's stack table that already exists** — locally or on the remote — is a **Human review**. Do not rename it yourself: the name is in the plan, and the plan is what the builder reads.
 - **The ceiling is <15> plan tasks or <4> PRs for one unit, and <8> tasks for one PR.** Expand anyway, and add a row to **Decisions awaiting the human** naming which ceiling was crossed — the unit was coarser than one spec should be, or one PR is more than a single session should carry. The work is not wrong; the slicing was.
 
-If the plan cannot be written because the spec is internally inconsistent, fix nothing silently: record it in **Decisions awaiting the human**, write the plan on the reading you judge correct, and say in the Approach section which reading you took. Set the plan's **Status** to `approved`.
+If `plan` halts on a spec ambiguity, that is a **Human review** (see **Guardrails**). If the spec is internally inconsistent in a way the skill did not halt on, fix nothing silently: record it in **Decisions awaiting the human**, write the plan on the reading you judge correct, and say in the Approach section which reading you took. Set the plan's **Status** to `approved`.
 
 ### A CODE task
 
@@ -210,7 +259,7 @@ Deliver **one whole pull request**: every task its **Tasks** cell names, each as
    `<cut-from>` is `origin/<the previous PR's branch>` when your PR is not the unit's first. When it **is** the unit's first: `origin/<base branch>` if every PR in the ledger above it is `merged` — check with `gh pr view <n> --json state,mergedAt` and confirm with `git merge-base --is-ancestor origin/<that branch> origin/<base branch>` — otherwise `origin/<the last branch in the ledger>`. If the path or the branch already exists and the ledger does not record it as this row's, stop: **Human review**, not something to delete or adopt. Then, under the lock, write the worktree path, the resolved cut-from **and its evidence**, and the resolved PR base into the ledger.
 2. **Bootstrap it**: `<bootstrap command>` from the worktree root (<fallback, e.g. `pnpm install --force` on `Cannot find native binding`>). Prove the baseline suite green before writing anything.
 3. **Confirm the base**: `git merge-base --is-ancestor <cut-from> HEAD` must succeed. A branch cut from the wrong base is a failure this queue exists to prevent — check it before writing code, not after.
-4. **Build every task in your Tasks cell, in plan order, one commit each**, with the build skill (`software-engineering-skills:build`), handing it this brief:
+4. **Build every task in your Tasks cell, in plan order, one commit each**, with the build skill (`software-engineering-skills:build --headless`), handing it this brief:
    > Build tasks `<the Tasks cell, in order>` from `<plan path>`, in the existing worktree `<path>` on branch `<branch>` — those tasks and nothing wider. One commit per task, named for the task, in that order. Red → green → yellow gate → commit, per task. The worktree and the branch are the queue's — do not create, switch, rebase or merge any branch, do not push, and do not open a pull request; this row does that itself, after you return. Stop and report blocked if anything in a task does not match the code.
    The full task blocks from the plan — files, acceptance criteria, verification, tests, scenarios — go into that brief verbatim. <Commit attribution rule from the guardrails, restated.>
 5. **Verify each task's own verification** from the plan, yourself, and tick that task's checkbox and its acceptance-criteria checkboxes with the commit SHA. Do this **per task, as it lands**, not once at the end: a criterion you cannot verify as written is a **Human review**, and finding that out three commits later costs three commits. Update the ledger's **Head** after each commit, so a reclaimer can see how far you got.
@@ -220,7 +269,7 @@ Deliver **one whole pull request**: every task its **Tasks** cell names, each as
 9. **Push** `git -C <worktree> push -u origin <branch>`.
 10. **Open the PR** through the **Open-PR path** in the metadata, never bare `gh pr create`. Its base is the previous PR's branch, or the branch's cut-from for a unit's first PR — verify after the fact with `gh pr view <n> --json baseRefName` and correct with `gh pr edit <n> --base <branch>` if the skill defaulted. The body carries: the unit and slice, the plan path, every task with its commit, the yellow-gate and judge results, the checks run and skipped, and how a reviewer or tester verifies it.
 11. **Write the gate into the PR body** if the unit brief or **External merge gates** names one — a `> **Do not merge until …**` line at the top.
-12. **Put a monitor on it**: `software-engineering-skills:monitor-pr`, or a `pr-monitor` agent in its own throwaway worktree — never in this branch's worktree. Record which, and its state, in the ledger.
+12. **Put a monitor on it**: `software-engineering-skills:monitor-pr`, or a `pr-monitor` agent in its own throwaway worktree — never in this branch's worktree. Record which, and its state, in the ledger. **Under an orchestrated driver, do not start it yourself** — waiting on the PR would hold the queue. Set the ledger's **Monitor** cell to `requested`; the orchestrator hands it to a monitor subagent.
 13. **Record** on the board and in the ledger: every commit SHA, the PR URL, State `open`. If this was the unit's last PR, append the next unit's rows and ready the first; if it was the slice's last unit, mark the slice `delivered — awaiting the human` in **Release plan** and send one notification. Leave the worktree in place.
 
 A build that reports `blocked`, a task that turns out to be two, a file the plan names that is not there — all of these are step 6 conflicts in the claim protocol. Never widen a commit to route around one, and never drop a task from the PR to get it opened: the **Tasks** cell is the contract.
@@ -302,9 +351,9 @@ These block **merging**, not building. An agent never waits on one; it records i
 
 **Blocking conflicts only.** A task that cannot proceed either way without a decision writes one block here, sets its board row to `NEEDS-HUMAN`, and stops — and the queue stops with it (claim protocol step 6). Everything that can proceed on a stated assumption goes in **Decisions awaiting the human** instead.
 
-**To answer a block**: write your decision under **Human answer** — an option letter, a letter with conditions, or an instruction of your own — fill **Answered by**, and change the block's **Status** from `OPEN` to `ANSWERED`. That is all: you do not need to touch the board. The next tick resumes the blocked task from where it stopped, applies your answer, and sets the block to `APPLIED`. To clear a block without a decision — you fixed it by hand, or it no longer applies — write that as the answer and set the Status to `WITHDRAWN`, then set the board row back to `READY` and this file's **Status** line back to `running` yourself.
+**To answer a block**: write your decision under **Human answer** — an option letter, a letter with conditions, or an instruction of your own — fill **Answered by**, and change the block's **Status** from `OPEN` to `ANSWERED`. That is all: you do not need to touch the board. The next claiming agent resumes the blocked task from where it stopped, applies your answer, and sets the block to `APPLIED`. To clear a block without a decision — you fixed it by hand, or it no longer applies — write that as the answer and set the Status to `WITHDRAWN`, then set the board row back to `READY` and this file's **Status** line back to `running` yourself.
 
-Status values: `OPEN` (waiting for the human) · `ANSWERED` (decided; the next tick resumes the task) · `APPLIED` (an agent acted on the answer) · `WITHDRAWN` (cleared by the human without a decision for the agent to apply).
+Status values: `OPEN` (waiting for the human) · `ANSWERED` (decided; the next claiming agent resumes the task) · `APPLIED` (an agent acted on the answer) · `WITHDRAWN` (cleared by the human without a decision for the agent to apply).
 
 Blocks are numbered `HR-1`, `HR-2`, … in the order they are raised, appended below the template, and never deleted or renumbered. An `APPLIED` block is the record of a decision; leave it where it is.
 
@@ -357,6 +406,11 @@ Non-blocking. Append a row here rather than stopping the queue. State what you a
 ## Guardrails
 
 - **Never edit files in** `<reference checkout>`**.** It is the reference checkout. All work happens in worktrees.
+- **`software-engineering-skills:specs`, `software-engineering-skills:plan` and `software-engineering-skills:build` always run with `--headless`**, whether you are a scheduled tick, an orchestrator's worker, or an ad-hoc subagent. No other skill gets the flag. Nobody answers a skill's questions from inside a task, not even under an orchestrator: this file is the only channel to the human. Each headless outcome has a place here:
+  - an item the skill records as `assumed (headless)` → a row in **Decisions awaiting the human**, then carry on;
+  - the skill **halts** — a coin flip it will not pick, drift between plan and code, an existing file it will not overwrite — → a **Human review**, with the skill's halt report as **The conflict**. Never re-run the skill without the flag to get past a halt;
+  - the skill writes its document as `**Status**: draft` → set it to `approved` yourself once it is complete, as the task instructions say — the board is the approval record;
+  - a pull request `build` opens under `--headless` is a **draft**, and the **Standing authorization** covers it as one.
 - **Never enter a worktree whose preconditions fail** — clean tree, ledger Head — and never one that is not the ledger's for your branch. See **Worktrees**.
 - **One plan task, one commit.** A CODE row makes exactly as many commits as its **Tasks** cell names, in that order. Two commits for one task, a commit spanning two, or a task with no commit is drift — stop.
 - **A CODE row ends at an open PR.** A branch that is built, green and unopened is not a finished row; never mark one `DONE` and never drop a task to get the PR opened.
@@ -374,7 +428,7 @@ Non-blocking. Append a row here rather than stopping the queue. State what you a
 - **One paragraph is one physical line.** Never hard-wrap prose, list items, metadata lines or table rows. Headings, blank lines, horizontal rules and fenced code blocks keep their own lines and are never joined; never reflow inside a fence.
 - <**No frontmatter**, and the first H1 is the title the vault displays. — keep when the plan location renders markdown as rich text>
 - **Edit with small exact replacements, never by rewriting the file.** The human edits this file too — answering a **Human review** — and does not take the lock.
-- **Only these change during normal operation**: the board (its rows' Status, Claimed by, Claimed, Completed and Output cells, plus the rows a PLAN row appends); the metadata **Status** line; the stack ledger; the release plan's State column; the gate checkboxes; **Human review** blocks (appended by agents, answered by the human, closed by agents); the decisions table; and the event log. The briefs, the protocol, the worktree rules and the guardrails are edited by a human, or by an agent that has been told to.
+- **Only these change during normal operation**: the board (its rows' Status, Claimed by, Claimed, Completed and Output cells, plus the rows a PLAN row appends); the metadata **Status** line (and **Driver**, when the human switches drivers); the stack ledger; the release plan's State column; the gate checkboxes; **Human review** blocks (appended by agents, answered by the human, closed by agents); the decisions table; and the event log. The briefs, the protocol, the worktree rules and the guardrails are edited by a human, or by an agent that has been told to — an orchestrator relaying the human's explicit word counts, and logs it as `human via orchestrator`.
 - **Appending board rows is a PLAN row's job and nobody else's**, and it happens in the same locked edit that completes that row.
 - **The event log is append-only.** Never rewrite or delete a line.
 - **Board edits happen under the lock.** Event-log lines are written in the same locked edit as the board change they describe.
@@ -385,5 +439,5 @@ Non-blocking. Append a row here rather than stopping the queue. State what you a
 
 One line per state change, newest at the bottom: `- <UTC timestamp> · <agent id | human> · <what happened>`.
 
-- <UTC timestamp> · human · Queue created from `<source>` by `/delivery-loop`. <n> slices, <m> units, stages <SPEC → PLAN → CODE | PLAN → CODE>. `<first task>` set `READY`; CODE rows arrive by expansion. Scheduled as <scheduler> `<name or id>`, every <n> minutes.
+- <UTC timestamp> · human · Queue created from `<source>` by `/delivery-loop`. <n> slices, <m> units, stages <SPEC → PLAN → CODE | PLAN → CODE>. `<first task>` set `READY`; CODE rows arrive by expansion. Driver: <scheduled as <scheduler> `<name or id>`, every <n> minutes | orchestrated by session `<name or id>`>.
 ````

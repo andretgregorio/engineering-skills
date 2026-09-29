@@ -1,16 +1,16 @@
 # Implementation Loop Skill
 
-Turns **one approved plan that orders its PRs** into a queue that builds itself: a markdown file that scheduled agents claim tasks from, one at a time, until every PR in the stack is open.
+Turns **one approved plan that orders its PRs** into a queue that builds itself: a markdown file that agents claim tasks from, one at a time, until every PR in the stack is open.
 
 ```
-/implementation-loop [--plan-file <path>] [--ticket <ID>] [--cadence <minutes>] [--stages spec,plan,code|code] [--no-schedule] [--headless]
+/implementation-loop [--plan-file <path>] [--ticket <ID>] [--cadence <minutes>] [--stages spec,plan,code|code] [--queue-mode scheduled|orchestrated] [--no-schedule] [--headless]
 ```
 
 ## Purpose
 
 `/build` executes a plan in one live session. That session has to stay open, and its context is the build's memory. This skill is for when the plan should be built by **scheduled agents instead** — overnight, or across days, each agent short-lived and knowing nothing but what the queue file tells it.
 
-It writes the queue, gets the human's approval, schedules the recurring tick, and stops. It never claims a task itself.
+It writes the queue, gets the human's approval, and starts a driver — a recurring schedule, or an orchestrator session (see *Two drivers*). It never claims a task itself.
 
 ## How the queue runs
 
@@ -40,6 +40,22 @@ A shared stack worktree accumulates state nobody owns — a human's edits, an ea
 
 **To answer a Human review**, the human writes the decision under **Human answer** and sets the block's Status to `ANSWERED`. Nothing else. The next tick claims the stopped task, reads the answer first, continues from what was left in place, and marks the block `APPLIED`. An answer it cannot act on without guessing goes back to `OPEN` with a follow-up question.
 
+**`specs`, `plan` and `build` always run with `--headless` inside the queue** — ticks, orchestrator workers and ad-hoc subagents alike. The queue is the only channel to the human: a headless assumption becomes a decisions row, a headless halt becomes a Human review, a draft spec or plan is approved by its task, and a PR `build` opens is a draft.
+
+## Two drivers
+
+The queue file is the same under both; only what starts claiming agents changes. `--queue-mode scheduled|orchestrated` picks one, and the skill asks when it is absent. A queue can switch drivers mid-flight.
+
+| | **Scheduled** | **Orchestrated** |
+|---|---|---|
+| What starts agents | A recurring tick, every <n> min | One orchestrator session, dispatching a subagent per task the moment the last one returns |
+| A Human review | A notification; answered in the file | Brought to the human in chat; their answer is written into the block verbatim |
+| The human's own requests | Another session, which must stay out of the queue's worktrees | Routed by the orchestrator: progress from the file, changes to unbuilt work as logged edits, work on an open PR to an ad-hoc subagent in a throwaway worktree, anything else to a subagent kept away from the queue |
+| A dead worker | Reclaimed after the window (6 h) | Marked `abandoned` and reclaimed at once |
+| Lives | As long as the scheduler | As long as the orchestrator's session; a fresh one resumes from the queue's orchestrator prompt |
+
+The orchestrator never claims a row or does a row's work — it is a dispatcher and a bridge, and the queue file, not its memory, is the state. Workers are Agent-tool subagents only when preflight proves a subagent can dispatch its own (`/build` needs to); otherwise they are headless `claude -p` sessions.
+
 ## Scheduling
 
 The tick prompt is one line — *follow the instructions in this file* — and is written into the queue so the schedule can be rebuilt.
@@ -55,17 +71,17 @@ The tick runs unattended, so it needs a permission mode that lets it edit, run g
 ## What it produces
 
 - `queue-<slug>.md` beside the source plan, from [`references/queue-template.md`](references/queue-template.md): metadata, reading order, standing authorization, claim protocol, board, task instructions, worktree rules, stack ledger, PR briefs, merge gates, Human review, decisions table, guardrails, editing rules, event log.
-- A recurring schedule, created only after the human approves.
+- A driver — a recurring schedule, or this session as orchestrator — started only after the human approves.
 - A short report: the stack, the first claimable row, the scheduler, and what the human does next.
 
 ## Boundaries
 
 | It does | It never does |
 |---|---|
-| Writes the queue and schedules the tick | Claims a task, or runs one to "get it started" |
+| Writes the queue and starts its driver | Claims a task, or runs one to "get it started" |
 | Takes the PR ordering from the source plan | Re-decides the order, the branches or the scope |
 | Lists the exact pushes and PRs the human authorized | Licenses any outward act beyond that list |
-| Writes the queue as a draft when headless | Schedules unattended agents without an explicit yes |
+| Writes the queue as a draft when headless | Starts a driver without an explicit yes |
 | Asks when a queue file already exists | Overwrites live queue state |
 
 Full definition, including preflight, the quality gate and the report format: [`SKILL.md`](SKILL.md).

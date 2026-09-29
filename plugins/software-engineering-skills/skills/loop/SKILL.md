@@ -1,9 +1,9 @@
 ---
 name: loop
-description: Routes one document to the loop that can run it — the queue-building skills that turn an approved artifact into work scheduled agents pick up unattended. A design document, story map or release plan whose delivery is sliced goes to software-engineering-skills:delivery-loop, which writes the specs and the plans too. An approved implementation plan that orders its PRs goes to software-engineering-skills:implementation-loop, which schedules those PRs. It classifies from the document's content rather than its filename, says what the evidence was, confirms when two readings are plausible, hands the invocation's other arguments through unchanged, and stops — it never writes a queue, schedules a tick or claims a task itself. Use when the user says "loop this", "queue this up", "run this unattended", "build this overnight", "schedule agents for this", or invokes /loop with a document. NOT for running a prompt on a recurring interval — that is the built-in /loop skill, and an invocation whose first argument is an interval or a slash command belongs to it.
+description: Routes one document to the loop that can run it — the queue-building skills that turn an approved artifact into work agents pick up one task at a time, driven either by a recurring schedule or by an orchestrator session that dispatches subagents and bridges to the human (--queue-mode scheduled|orchestrated, passed through; the chosen loop asks when it is absent). A design document, story map or release plan whose delivery is sliced goes to software-engineering-skills:delivery-loop, which writes the specs and the plans too. An approved implementation plan that orders its PRs goes to software-engineering-skills:implementation-loop, which schedules those PRs. It classifies from the document's content rather than its filename, says what the evidence was, confirms when two readings are plausible, hands the invocation's other arguments through unchanged, and stops — it never writes a queue, schedules a tick or claims a task itself. Use when the user says "loop this", "queue this up", "run this unattended", "build this overnight", "schedule agents for this", or invokes /loop with a document. NOT for running a prompt on a recurring interval — that is the built-in /loop skill, and an invocation whose first argument is an interval or a slash command belongs to it.
 role: orchestrator
 user-invocable: true
-argument-hint: "[<path to a design doc, story map or plan>] [--ticket <ID>] [<flags passed through to the chosen loop>]"
+argument-hint: "[<path to a design doc, story map or plan>] [--ticket <ID>] [--queue-mode scheduled|orchestrated] [<flags passed through to the chosen loop>]"
 ---
 
 # Loop
@@ -17,7 +17,7 @@ There are two, and the difference between them is how much of the pipeline still
 | **Delivery loop** | A design document, story map or release plan whose delivery is **sliced** | Per unit: SPEC → PLAN → one row per planned PR, each building that PR's tasks and opening it. The board grows as plans are written | `software-engineering-skills:delivery-loop` |
 | **Implementation loop** | An **approved plan** that orders its PRs | Per PR: SPEC → PLAN → CODE, or CODE-only when the plan is already buildable | `software-engineering-skills:implementation-loop` |
 
-Both write a queue file, take the human's approval, schedule a recurring tick, and stop. Choosing between them is this skill's whole job, and getting it wrong is expensive: the wrong loop either re-specifies work that was already planned, or builds a sliced delivery from guesses.
+Both write a queue file, take the human's approval, and start a **driver** for it — a recurring schedule, or an orchestrator session that dispatches a subagent per task and carries questions to the human in chat. Which driver is `--queue-mode scheduled|orchestrated`, and both loops ask when it is absent. Choosing between them is this skill's whole job, and getting it wrong is expensive: the wrong loop either re-specifies work that was already planned, or builds a sliced delivery from guesses.
 
 ## This is not the built-in `/loop`
 
@@ -28,6 +28,7 @@ Claude Code ships a built-in `/loop` that runs a prompt or slash command on a re
 - **Write a queue, schedule anything, or claim a task.** The loop it routes to does all of that, including its own approval gate. You never pre-empt that gate.
 - **Fix the input.** A source with no slicing, a draft plan, a spec with nothing downstream of it — each has a named next step. Offer it and stop; do not route a document that is not ready.
 - **Re-decide the work.** Slicing, ordering, PR boundaries and scope belong to the document and the loop that reads it.
+- **Choose the driver.** `--queue-mode` is the target loop's question: pass it through when given, and when it is not, leave it for the target to ask alongside its own approval questions — asking here too would ask twice.
 - **Guess.** Two plausible readings is a question to the human, not a coin flip.
 
 ## Classification
@@ -51,7 +52,7 @@ Two things that do **not** decide the route: the filename, and which skill wrote
 
 - **Classify from content, with evidence.** Name the sections and lines you read. A route you cannot evidence is a route you are guessing.
 - **Ambiguity goes to the human, once.** One question, both options named with what each would produce. Never route on a tie.
-- **Pass arguments through unchanged.** Every flag the user gave that the target skill accepts — `--ticket`, `--cadence`, `--stages`, `--slices`, `--max-open-prs`, `--no-schedule`, `--headless` — goes on verbatim. A flag the target does not accept is named back to the user, not dropped silently.
+- **Pass arguments through unchanged.** Every flag the user gave that the target skill accepts — `--ticket`, `--queue-mode`, `--cadence`, `--stages`, `--slices`, `--max-open-prs`, `--no-schedule`, `--headless` — goes on verbatim. A `--queue-mode` value other than `scheduled` or `orchestrated` is named back to the user, not guessed at. A flag the target does not accept is named back to the user, not dropped silently.
 - **Route once.** You invoke one loop, with the resolved document path, and you are done. You do not supervise it, re-enter it, or run a second one.
 - **A not-ready document is a stop, not a workaround.** Name the missing step and the skill that produces it.
 
@@ -77,7 +78,7 @@ Route silently only when the evidence is unambiguous. Otherwise ask one question
 
 ### 5. Hand over
 
-Invoke the chosen skill through the Skill tool — `software-engineering-skills:delivery-loop` or `software-engineering-skills:implementation-loop` — with the resolved document path and the passed-through flags. Say in one line which route you took and why, then let that skill run its own steps, including its approval gate. Do not restate its output as your own.
+Invoke the chosen skill through the Skill tool — `software-engineering-skills:delivery-loop` or `software-engineering-skills:implementation-loop` — with the resolved document path and the passed-through flags. Say in one line which route you took and why, then let that skill run its own steps, including its driver choice and its approval gate. Under `orchestrated`, that skill's session goes on to become the orchestrator — that is the target's doing, not a second route. Do not restate its output as your own.
 
 ## Headless mode
 
@@ -95,6 +96,7 @@ Headless when `--headless` is passed or there is provably no human in the loop.
 **Evidence**: <the signals that decided it>
 **Rejected**: <the other route> — <the signal that ruled it out>
 **Passed through**: <flags>
+**Queue mode**: <scheduled | orchestrated | not given — the target loop will ask>
 ```
 
 ## Running this by hand (no skill)

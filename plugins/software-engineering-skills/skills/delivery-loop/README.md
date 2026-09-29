@@ -1,9 +1,9 @@
 # Delivery Loop Skill
 
-Turns **a design document or story map whose delivery is already sliced** into a queue that specifies, plans and builds itself: a markdown file that scheduled agents claim tasks from, one at a time, until every slice's PRs are open.
+Turns **a design document or story map whose delivery is already sliced** into a queue that specifies, plans and builds itself: a markdown file that agents claim tasks from, one at a time, until every slice's PRs are open.
 
 ```
-/delivery-loop [--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,code|plan,code] [--max-open-prs <n>] [--no-schedule] [--headless]
+/delivery-loop [--design-doc <path>] [--story-map <path>] [--ticket <ID>] [--slices <ids>] [--cadence <minutes>] [--stages spec,plan,code|plan,code] [--max-open-prs <n>] [--queue-mode scheduled|orchestrated] [--no-schedule] [--headless]
 ```
 
 ## Purpose
@@ -12,7 +12,7 @@ Turns **a design document or story map whose delivery is already sliced** into a
 
 Given a sliced delivery, it writes one queue in which every unit of work gets its spec written (`software-engineering-skills:specs`), then its plan (`software-engineering-skills:plan`), then **one row per pull request that plan proposes** — one agent, one session, building every task of that PR as its own commit through `software-engineering-skills:build` and opening the PR at the end of it.
 
-It writes the queue, gets the human's approval, schedules the recurring tick, and stops. It never claims a task itself.
+It writes the queue, gets the human's approval, and starts a driver — a recurring schedule, or an orchestrator session (see *Two drivers*). It never claims a task itself.
 
 | | `/delivery-loop` | `/implementation-loop` |
 |---|---|---|
@@ -80,6 +80,24 @@ The queue's **Release plan** holds, per slice: outcome and KPI, units, flag and 
 
 To answer, the human writes the decision under **Human answer** and flips the block to `ANSWERED`. Nothing else. The next tick claims the stopped row, reads the answer first, continues from what was left in place, and marks the block `APPLIED`.
 
+**`specs`, `plan` and `build` always run with `--headless` inside the queue** — ticks, orchestrator workers and ad-hoc subagents alike. The queue is the only channel to the human: a headless assumption becomes a decisions row, a headless halt becomes a Human review, a draft spec or plan is approved by its task, and a PR `build` opens is a draft.
+
+## Two drivers
+
+The queue file is the same under both; only what starts claiming agents changes. `--queue-mode scheduled|orchestrated` picks one, and the skill asks when it is absent. A queue can switch drivers mid-flight.
+
+| | **Scheduled** | **Orchestrated** |
+|---|---|---|
+| What starts agents | A recurring tick, every <n> min | One orchestrator session, dispatching a subagent per task the moment the last one returns |
+| A Human review | A notification; answered in the file | Brought to the human in chat; their answer is written into the block verbatim |
+| The human's own requests | Another session, which must stay out of the queue's worktrees | Routed by the orchestrator: progress from the file, changes to unbuilt work as logged edits, work on an open PR to an ad-hoc subagent in a throwaway worktree, anything else to a subagent kept away from the queue |
+| A dead worker | Reclaimed after the window (6 h) | Marked `abandoned` and reclaimed at once |
+| Lives | As long as the scheduler | As long as the orchestrator's session; a fresh one resumes from the queue's orchestrator prompt |
+
+The orchestrator never claims a row or does a row's work — it is a dispatcher and a bridge, and the queue file, not its memory, is the state. Workers are Agent-tool subagents only when preflight proves a subagent can dispatch its own (`/build` needs to); otherwise they are headless `claude -p` sessions.
+- **Monitors** run in subagents: a CODE row marks its ledger Monitor cell `requested`, and the orchestrator dispatches a subagent to run `monitor-pr` on that PR. The orchestrator never runs `monitor-pr` itself; if the subagent cannot, the PR is handed to the human.
+- **Delivered slices** are announced in chat with their release gate; the next slice keeps building.
+
 ## Scheduling
 
 The tick prompt is one line — *follow the instructions in this file* — and is written into the queue so the schedule can be rebuilt.
@@ -95,19 +113,19 @@ The tick runs unattended, so it needs a permission mode that lets it edit, run g
 ## What it produces
 
 - `delivery-queue-<slug>.md` beside the source, from [`references/queue-template.md`](references/queue-template.md): metadata, reading order, standing authorization, claim protocol including the expansion step, the board, per-kind row instructions, worktree rules, stack ledger, release plan, unit briefs, merge gates, Human review, decisions table, guardrails, editing rules, event log.
-- A recurring schedule, created only after the human approves.
+- A driver — a recurring schedule, or this session as orchestrator — started only after the human approves.
 - A short report: the slices and their units, the first claimable row, how many rows to expect per unit, the scheduler, and what the human does next.
 
 ## Boundaries
 
 | It does | It never does |
 |---|---|
-| Writes the queue and schedules the tick | Claim a row, or run one to "get it started" |
+| Writes the queue and starts its driver | Claim a row, or run one to "get it started" |
 | Takes the slicing and its order from the source | Re-slice, re-order, or re-scope the delivery |
 | Confirms the slice → unit split with the human | Derive units silently and start specifying |
 | Lists the exact pushes, PRs and the PR cap the human authorized | License any outward act beyond that list |
 | Records a slice as delivered | Merge, release, or enable a flag |
-| Writes the queue as a draft when headless | Schedule unattended agents without an explicit yes |
+| Writes the queue as a draft when headless | Start a driver without an explicit yes |
 | Asks when a queue file already exists | Overwrite live queue state |
 
 Full definition, including preflight, the expansion contract and the quality gate: [`SKILL.md`](SKILL.md).
