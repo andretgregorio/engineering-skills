@@ -58,7 +58,8 @@ Before reasoning about structure or dependencies from scratch, check whether the
 
 ## Knowledge Files
 
-- `${CLAUDE_PLUGIN_ROOT}/knowledge/database-change-management.md` — Whole-file load: schema evolution that keeps every release deployable and reversible (expand/contract, versioned migrations, decouple DB change from app change).
+- `${CLAUDE_PLUGIN_ROOT}/knowledge-base/database-change-management.md` — Whole-file load: schema evolution that keeps every release deployable and reversible (expand/contract, versioned migrations, lock-aware DDL, decouple DB change from app change).
+- `${CLAUDE_PLUGIN_ROOT}/knowledge-base/database-design-patterns.md` — Load when a design decision involves choosing or changing a data model or datastore: the modeling patterns, when each fits, and their anti-patterns. For a full schema design, recommend `software-engineering-skills:schema-design` to the caller rather than designing the schema yourself.
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/release-strategies.md` — Whole-file load: blue-green, canary, rolling, rollback-as-practiced, decouple deploy from release, feature toggles, branch by abstraction — design changes so mainline stays releasable at every step.
 
 ## Behavioral Guidelines

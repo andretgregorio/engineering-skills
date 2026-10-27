@@ -60,6 +60,10 @@ Each skill also documents how to run its phase by hand, without the skill.
 | [`test-mutation`](plugins/software-engineering-skills/skills/test-mutation/README.md) | Mutation testing patterns for checking whether tests actually catch bugs |
 | [`arm-workshop`](plugins/software-engineering-skills/skills/arm-workshop/README.md) | Collaborative technical investigation with agent teams — ARM methodology, risk storming, C4 container diagrams |
 | [`user-story-mapping-workshop`](plugins/software-engineering-skills/skills/user-story-mapping-workshop/README.md) | Story maps and outcome-based release slicing |
+| [`database`](plugins/software-engineering-skills/skills/database/README.md) | The one command for database work — routes a request to `schema-design`, `schema-migration`, or `schema-review` from the request and the schema, and stops |
+| [`schema-design`](plugins/software-engineering-skills/skills/schema-design/README.md) | Via `database`, or triggered by Claude. Models the schema for a new solution — settles the workload with the human, picks the modeling pattern, designs the model, reviews it cold, and stops at approval |
+| [`schema-migration`](plugins/software-engineering-skills/skills/schema-migration/README.md) | Via `database`, or triggered by Claude. Turns a schema change into release-by-release expand/contract phases and writes one phase's migrations, roll-backs, backfills, and tests against a throwaway database |
+| [`schema-review`](plugins/software-engineering-skills/skills/schema-review/README.md) | Via `database`, or triggered by Claude. Reviews a schema change or proposal — compatibility, reversibility, locks, access-pattern coverage — and returns approve, revise, or block |
 
 ### Design and UX reference skills
 
@@ -85,6 +89,9 @@ Not user-invocable — the refining phases load them through the Skill tool when
 | [`code-smell-detector`](plugins/software-engineering-skills/agents/code-smell-detector/README.md) | Detects code smells across 10 categories and 50+ smells |
 | [`test-design-reviewer`](plugins/software-engineering-skills/agents/test-design-reviewer/README.md) | Scores test quality against Dave Farley's properties of good tests |
 | [`scenario-story-writer`](plugins/software-engineering-skills/agents/scenario-story-writer/README.md) | Narrative user scenarios and diagnostic/error design, instead of "As a… I want…" |
+| [`data-modeler`](plugins/software-engineering-skills/agents/data-modeler/README.md) | Chooses the modeling pattern for a workload and designs the schema, every index traced to an access pattern |
+| [`migration-engineer`](plugins/software-engineering-skills/agents/migration-engineer/README.md) | Writes one phase of a schema change as lock-safe, reversible, tested migrations against a local database |
+| [`schema-reviewer`](plugins/software-engineering-skills/agents/schema-reviewer/README.md) | Read-only reviewer for schema changes and proposals, against the plugin's database knowledge base |
 
 The four review agents — clean coder, code smells, test design, plus the `test-mutation` skill — are what `/build` fans out as its **yellow gate** after every green, before any commit.
 
@@ -102,6 +109,8 @@ plugins/
                                     and references/ alongside
     agents/<name>/<name>.md         one agent per directory, plus README.md,
                                     references/, templates/, examples/
+    knowledge-base/<topic>.md       shared reference read by agents and skills
+                                    via ${CLAUDE_PLUGIN_ROOT}/knowledge-base/
 ```
 
 ## Contributing

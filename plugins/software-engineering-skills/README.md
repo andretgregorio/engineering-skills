@@ -251,6 +251,42 @@ Assesses **one codebase or service's** observability — its ability to detect a
 
 ---
 
+## Database management
+
+One command — **`/database`** — over three skills for the life of a schema: designing it, changing it, and judging changes to it, all reading one shared [knowledge base](#knowledge-base). Each of the three orchestrates a dedicated agent, and the two that produce something run the read-only [`schema-reviewer`](agents/schema-reviewer/README.md) as their gate.
+
+### `/database`
+
+*[Skill README →](skills/database/README.md)*
+
+The single entry point. It reads the request — and greps the schema for what it names — then hands over to exactly one skill and stops: something new to store goes to `schema-design`; a change to an existing schema, an approved design, or a plan to resume goes to `schema-migration`; a migration, branch, PR, or design document to check goes to `schema-review`. It names the evidence for its route, asks once when two are plausible, and passes flags through.
+
+```
+/database [<request | schema-design.md | migration-plan.md | migration file | PR number | branch>] [--repo <path>] [--ticket <ID>] [--store <engine>] [--consumers <path,path>] [--headless]
+```
+
+The three skills below are not slash commands. Besides the router, Claude reaches them on its own: `schema-design` when a discussion of a new implementation introduces data that must be stored, `schema-migration` when an implementation needs to change an existing schema, and `schema-review` before a change touching migrations, schema files, or ORM models is committed. That is Claude's judgement from each skill's description, not a guarantee. Run as a subagent — inside `/build`, say — each one stops and reports instead, because it needs to dispatch agents of its own.
+
+### `schema-design`
+
+*[Skill README →](skills/schema-design/README.md)*
+
+Models the schema for **one new solution**. It settles the workload with the human first — access patterns as `AP-n`, volume and growth, consistency, history, retention, sensitive data, tenancy — asking only the questions whose answers change the model. Then the [`data-modeler`](agents/data-modeler/README.md) chooses the pattern (relational, dimensional, data vault, document, key-value, wide-column, columnar, time-series, graph, event-sourced) and designs the logical and physical model, every index traced to an access pattern and every one-way door named. The reviewer checks it cold; `schema-design.md` stops at a human approval gate. It defaults to the datastore already in use, and escalates a new one rather than adopting it.
+
+### `schema-migration`
+
+*[Skill README →](skills/schema-migration/README.md)*
+
+Gets the database to the schema it needs **without an outage and without losing a way back**. It classifies each change as additive, lock-sensitive, breaking, or data; splits breaking changes into expand → migrate → contract across as many releases as the roll-back test requires; and writes `migration-plan.md`, approved before any file is written when it spans releases or carries risk. The [`migration-engineer`](agents/migration-engineer/README.md) then writes **one phase** — migrations, real roll-backs, separate batched backfills, tests that went red first — against a local throwaway database, and the reviewer gates it. Later phases resume from the plan once a human confirms the earlier one is deployed. It never touches a shared database and never writes the application code a phase needs — it lists it.
+
+### `schema-review`
+
+*[Skill README →](skills/schema-review/README.md)*
+
+Reviews **one schema change or proposal** and returns `approve`, `revise`, or `block`, with findings ranked Critical / Moderate / Low and `path:line` evidence. A change review asks whether the previous application version survives the new schema during rollout and after a roll-back, whether the change reverses without data loss, what each statement locks and rewrites, and whether it is tested. A proposal review asks whether every access pattern is served and the model fits the workload. Unknown table sizes are judged as large. Read-only.
+
+---
+
 ## Design and UX reference skills
 
 Five **reference skills**: not user-invocable and never invoked directly, they are loaded through the Skill tool by the two refining phases above. Splitting them this way keeps the design vocabulary out of every context that does not need it.
@@ -277,6 +313,13 @@ Each agent directory carries its own README with purpose, boundaries, and input/
 |---|---|---|
 | [`tdd-developer`](agents/tdd-developer/README.md) | sonnet | Implements one planned task at a time inside an assigned worktree, test first, exactly one commit per task. Never creates branches, pushes, or opens PRs — it reports `blocked` when the plan and the codebase disagree. |
 | [`pr-monitor`](agents/pr-monitor/README.md) | sonnet | Takes one open PR to *ready for human review*: every check green, every automated finding applied or answered, every changes-requested review addressed or justified. Never merges, approves, or disables a test to get green — merging is [`/monitor-pr`](skills/monitor-pr/README.md), which dispatches this agent for the repairs. |
+| [`migration-engineer`](agents/migration-engineer/README.md) | sonnet | Writes one phase of a schema change as migrations — lock-safe DDL, real roll-backs, separate batched backfills, tests red first — verified against a local throwaway database. Never touches a shared database, never edits an applied migration, never ships a later phase early. |
+
+### Design
+
+| Agent | Model | Summary |
+|---|---|---|
+| [`data-modeler`](agents/data-modeler/README.md) | opus | Chooses the modeling pattern that fits a workload and designs the schema — access patterns, logical and physical model, keys and indexes traced to access patterns, lifecycle, evolution, rejected alternatives — against [`knowledge-base/database-design-patterns.md`](knowledge-base/database-design-patterns.md). Decides within the existing stack; escalates a new datastore. Read-only. |
 
 ### Judging and review
 
@@ -288,6 +331,7 @@ Each agent directory carries its own README with purpose, boundaries, and input/
 | [`code-smell-detector`](agents/code-smell-detector/README.md) | sonnet | 10 smell categories and 50+ distinct smells from the [Luzkan catalog](https://github.com/Luzkan/smells) — bloaters, change preventers, couplers, dispensables, OO abusers, obfuscators, and the rest. Detection-only. |
 | [`test-design-reviewer`](agents/test-design-reviewer/README.md) | opus | Scores tests against Dave Farley's properties of good tests, returning a Farley Score. Catches the isolation and repeatability violations behind flaky CI. Worked examples for both a high- and a low-scoring suite live in its `examples/`. |
 | [`observability-reviewer`](agents/observability-reviewer/README.md) | sonnet | Assesses fault detection, triage, and root-cause ability against [`knowledge-base/observability-engineering.md`](knowledge-base/observability-engineering.md) — metrics, logs, traces, errors, profiling, alerting — ranked Critical/Moderate/Low with file:line evidence. Assessment-only. |
+| [`schema-reviewer`](agents/schema-reviewer/README.md) | opus | Reviews schema changes (compatibility with running and roll-back versions, reversibility, lock and rewrite risk, backfills, migration tests) and schema proposals (access-pattern coverage, pattern fit, integrity, evolution) against the three database knowledge files. `approve` / `revise` / `block`; unknown table sizes judged as large. Review-only. |
 
 ### Requirements
 
@@ -299,10 +343,24 @@ The reviewing and judging agents are read-only: `clean-coder-reviewer` and `plan
 
 ---
 
+## Knowledge base
+
+Plugin-wide reference files in [`knowledge-base/`](knowledge-base/). Agents and skills read them at run time through `${CLAUDE_PLUGIN_ROOT}/knowledge-base/<file>.md` rather than carrying their own copies, so a correction lands everywhere at once.
+
+| File | Covers | Read by |
+|---|---|---|
+| [`observability-engineering.md`](knowledge-base/observability-engineering.md) | The basic questions (detect, triage, root cause, trend), the pillars, SLIs/SLOs and alerting, anti-patterns | `observability-reviewer` |
+| [`database-design-patterns.md`](knowledge-base/database-design-patterns.md) | Relational, dimensional, data vault, document, key-value, wide-column, columnar, time-series, graph, and cross-cutting patterns — when each fits, design rules, anti-patterns, how to choose | `data-modeler`, `schema-reviewer`, `architect` |
+| [`database-change-management.md`](knowledge-base/database-change-management.md) | Versioned migrations, expand/contract and the roll-back test, reversibility, lock-aware DDL, data migrations, review signals | `data-modeler`, `migration-engineer`, `schema-reviewer`, `schema-migration`, `architect` |
+| [`database-test-patterns.md`](knowledge-base/database-test-patterns.md) | Whether a test needs a real database, sandboxes, teardown, test data, testing constraints and migrations, pipeline placement | `migration-engineer`, `schema-reviewer`, `schema-migration` |
+
+---
+
 ## Layout
 
 ```
 .claude-plugin/plugin.json       manifest — name, version, license
+knowledge-base/<topic>.md        shared reference read by agents and skills at run time
 skills/<name>/SKILL.md           skill definition; long material in references/
 skills/<name>/README.md          human-facing docs for that skill
 agents/<name>/<name>.md          agent definition (frontmatter + system prompt)

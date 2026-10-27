@@ -66,9 +66,9 @@ Dispatched by situation, not by sequence:
 | `api-design` | API contracts, service interfaces, inter-service communication boundaries |
 | `legacy-code` | Planning incremental migration of legacy components toward the target architecture |
 
-It also loads two knowledge files whole, both about keeping mainline releasable while the architecture moves: `knowledge/database-change-management.md` (expand/contract, versioned migrations, decoupling DB change from app change) and `knowledge/release-strategies.md` (blue-green, canary, rolling, rollback-as-practiced, feature toggles, branch by abstraction).
+It also loads knowledge files about keeping mainline releasable while the architecture moves: [`knowledge-base/database-change-management.md`](../../knowledge-base/database-change-management.md) (expand/contract, versioned migrations, lock-aware DDL, decoupling DB change from app change) and `knowledge/release-strategies.md` (blue-green, canary, rolling, rollback-as-practiced, feature toggles, branch by abstraction). When a decision involves the data model or a datastore, it loads [`knowledge-base/database-design-patterns.md`](../../knowledge-base/database-design-patterns.md), and for a full schema design it recommends [`schema-design`](../../skills/schema-design/README.md) to the caller — that skill runs the [`data-modeler`](../data-modeler/README.md) agent, which the architect, itself a subagent, cannot dispatch.
 
-> **Prerequisite.** Of the skills above, only `specs` ships in this plugin; the other eight, the two knowledge files, and `knowledge/codegraph-vs-graphify.md` resolve against the `dev-team` plugin. Install it alongside this one, or the agent falls back to reasoning without them.
+> **Prerequisite.** Of the skills above, only `specs` ships in this plugin; the other eight, `knowledge/release-strategies.md`, and `knowledge/codegraph-vs-graphify.md` come from the `dev-team` plugin. Install it alongside this one, or the agent falls back to reasoning without them. The two database knowledge files ship in this plugin's `knowledge-base/`.
 
 ## Boundaries
 
