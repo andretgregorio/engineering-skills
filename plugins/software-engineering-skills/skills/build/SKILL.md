@@ -70,10 +70,12 @@ Every task moves red → green → **yellow** → commit. The yellow phase is no
 
 | Reviewer | Asks |
 |---|---|
-| `clean-coder-reviewer` | Is this readable and maintainable — naming, functions, SOLID, error handling? |
+| `clean-coder-reviewer` | Does it speak the domain's language, and is it readable and maintainable — naming, functions, SOLID, error handling? |
 | `code-smell-detector` | Which smells did this introduce — bloaters, couplers, dispensables, OO abusers? |
 | `test-design-reviewer` | Do these tests document behavior, and are they atomic, isolated, repeatable? |
 | `/test-mutation` (skill) | Would these tests actually catch the bug — which mutants survive? |
+
+Give `clean-coder-reviewer` the `domain-model.md`, spec, and plan paths along with the diff. Its domain-language check measures names against them, with the domain model first.
 
 Consolidate into one findings list, split into **blockers** (must be fixed before the commit) and **notes** (recorded, not built). Send it to the implementer.
 
@@ -327,6 +329,7 @@ Open with the repo brief — worktree path, base branch, the whole stack for thi
 Repo: <name>       Worktree: <path>       Branch: <branch> (off <base>)
 PR <n> of <m>: <title>
 Deliverable: this branch, ready to open a PR from.
+Domain model: <path to domain-model.md> — name everything with its code names.
 
 Tasks, in this order:
 <the plan's full task block for each — ID, type, why, spec refs, files table,

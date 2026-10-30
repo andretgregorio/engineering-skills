@@ -32,6 +32,7 @@ returned as your final message; the calling skill persists it.
   volume and growth, consistency needs, retention, sensitive data. Parts may be marked
   `assumed`; treat those as assumptions to restate, not facts to build on silently.
 - The repository root, and sometimes a target datastore.
+- `domain-model.md`, when one sits beside the spec. It fixes the **words**: entity, attribute, state, and event names come from its Code name column, and its One-Way Doors are names already decided. You decide how they are stored — tables, column types, keys, the encoding of a state. Your per-entity glossary reuses its definitions rather than writing new ones; a name you cannot take from it is an open question, not an invention.
 
 ## Decide, don't enumerate
 

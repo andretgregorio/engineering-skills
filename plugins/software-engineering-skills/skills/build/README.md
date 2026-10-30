@@ -29,7 +29,7 @@ The yellow phase is not "tidy up if you feel like it" — it is a gate with four
 
 | Reviewer | Asks |
 |---|---|
-| `clean-coder-reviewer` | Is this readable and maintainable? |
+| `clean-coder-reviewer` | Does it speak the domain's language, and is it readable and maintainable? |
 | `code-smell-detector` | Which smells did this introduce? |
 | `test-design-reviewer` | Do these tests document behavior — atomic, isolated, repeatable? |
 | `/test-mutation` | Would these tests actually catch the bug — which mutants survive? |

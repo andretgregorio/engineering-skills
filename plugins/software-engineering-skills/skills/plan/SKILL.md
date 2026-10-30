@@ -103,6 +103,7 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 
 - **Never wait for an answer, never fake one.** Take the most defensible option, record it in `## Open Questions` as `assumed (headless)`, and continue.
 - **An unresolved spec ambiguity halts.** A plan built on a coin flip the spec left open gets thrown away; report instead.
+- **A blocking domain-model question halts too** — a word that would become a persisted or published name, or would change an aggregate's shape. Non-blocking ones take the model's proposed term, recorded as `assumed (headless)`.
 - **The approval gate is never auto-approved.** Write the plan with `**Status**: draft`, print the path, and halt.
 - **Never silently overwrite** an existing `plan.md` — halt instead.
 - The quality gate still runs, and its verdicts are still recorded.
@@ -117,6 +118,12 @@ The run is **headless** when `--headless` is passed or there is provably no huma
 - If there is no spec, do not improvise one — offer `/specs` and stop. (For a change small and obvious enough that a spec is overkill, say so and ask the human to confirm before planning without one.)
 - Read the upstream documents the spec cites (`feature-description.md`, `story-map.md`, any `/arm-workshop` output) for the boundary and the target metric — and, on a UI feature, for the journey and its emotional arc, which say which steps the work must not degrade. Do not contradict them.
 - Check memory for prior context on this area: `~/.claude/projects/<project-slug>/memory/`, starting from `MEMORY.md`.
+- **Fix the vocabulary before naming anything.** Dispatch the `software-engineering-skills:domain-modeler` agent in Model mode with the spec, the upstream documents above, and the repository root. Pass any `domain-model.md` already beside the spec or in this area — the agent extends it rather than forking it.
+  - It returns `domain-model.md`. That holds the ubiquitous language with one code name per term, the aggregates and their invariants, the lifecycles and events, the persisted and published names that are one-way doors, and the questions for the domain owner.
+  - Its questions marked `Gate: yes` are a gate, like `## Unresolved Ambiguities`: they block a persisted or published name, or an aggregate's shape. Put them to the human before you plan, together with its Questions for Engineering, which are scope calls such as renaming a drifting class in this feature. Interactive: ask, then send the answers back to the same agent so it can settle the terms. Headless: halt.
+  - Its **Spec Gaps** are behavior the documents disagree on or never state. Treat them exactly like unresolved spec ambiguities: one that would change the shape of the work goes to the human, and may send the spec back to `/specs`.
+  - Its **To Verify in the Code** items are yours to check in step 2.
+  - From here on, every name the plan introduces uses the model's code names: paths, functions, endpoints, columns, events, test names, and the wording of the Gherkin. That includes names the codebase already has a different word for.
 
 ### 2. Ground the plan in the codebase
 
@@ -163,6 +170,7 @@ Hand the drafted plan, the spec, and repository access to an independent read-on
 - [ ] Every spec acceptance criterion is covered by at least one Product task.
 - [ ] Every task traces to the spec — a Product task to criteria, an Engineer task to the task it unlocks. Nothing implements something the spec does not ask for.
 - [ ] No task's acceptance criteria contradict the spec, weaken a stated threshold, or quietly redefine a term.
+- [ ] Every name the plan introduces — paths, functions, endpoints, columns, events, test names, Gherkin wording — is the code name `domain-model.md` gives that concept. No task uses a term from its Avoid column or a technical stand-in, and every one-way-door name matches the model.
 - [ ] Every user-visible failure mode in the spec's error handling is implemented by a task or explicitly deferred; every monitoring row marked *needs implementation* has a task.
 
 **Files and changes**
@@ -192,7 +200,7 @@ Fix blockers and re-run only the failing items (max 2 iterations; then surface t
 
 ### 8. Persist and present for approval (hard stop)
 
-Write to the location configured for plans at the user or project scope. If none is configured, write **alongside the spec** — `plan.md` in the same `<TICKET>_<slug>/` directory — so the description, the spec, and the plan sit together. Create the directory if missing. If the file exists, ask before overwriting (headless: halt).
+Write to the location configured for plans at the user or project scope. If none is configured, write **alongside the spec** — `plan.md` in the same `<TICKET>_<slug>/` directory — so the description, the spec, and the plan sit together. Write the model beside it as `domain-model.md`, updating the existing file when the agent extended one. Create the directory if missing. If `plan.md` exists, ask before overwriting (headless: halt).
 
 Print the path, show the human the task list, the PR stack, and the open questions, and ask them to approve or request changes. **Only on explicit approval** set `**Status**: approved`. Then stop: name `/build` — the implementation phase — as what comes next, and do not start it.
 
@@ -205,6 +213,7 @@ Print the path, show the human the task list, the PR stack, and the open questio
 **Created**: <date>
 **Status**: draft
 **Spec**: `spec.md` (sibling in this directory)
+**Domain model**: `domain-model.md` (sibling in this directory) — every name below uses its code names
 **Base branch**: <develop | main>
 **PRs**: <n> stacked
 

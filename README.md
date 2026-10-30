@@ -85,11 +85,12 @@ Not user-invocable — the refining phases load them through the Skill tool when
 | [`plan-conformance-judge`](plugins/software-engineering-skills/agents/plan-conformance-judge/README.md) | Read-only judge: is this branch what the plan said it would be? |
 | [`spike-conformance-judge`](plugins/software-engineering-skills/agents/spike-conformance-judge/README.md) | Read-only judge: did the spike answer the question that was actually asked, and prove it? Re-runs the probe before the worktrees are destroyed |
 | [`pr-monitor`](plugins/software-engineering-skills/agents/pr-monitor/README.md) | Drives one open PR to green CI and answered bot findings |
-| [`clean-coder-reviewer`](plugins/software-engineering-skills/agents/clean-coder-reviewer/README.md) | Clean Code / SOLID review, with pragmatic trade-offs |
+| [`clean-coder-reviewer`](plugins/software-engineering-skills/agents/clean-coder-reviewer/README.md) | Clean Code / SOLID review, with pragmatic trade-offs; always checks the code speaks the domain's language |
 | [`code-smell-detector`](plugins/software-engineering-skills/agents/code-smell-detector/README.md) | Detects code smells across 10 categories and 50+ smells |
 | [`test-design-reviewer`](plugins/software-engineering-skills/agents/test-design-reviewer/README.md) | Scores test quality against Dave Farley's properties of good tests |
 | [`scenario-story-writer`](plugins/software-engineering-skills/agents/scenario-story-writer/README.md) | Narrative user scenarios and diagnostic/error design, instead of "As a… I want…" |
 | [`data-modeler`](plugins/software-engineering-skills/agents/data-modeler/README.md) | Chooses the modeling pattern for a workload and designs the schema, every index traced to an access pattern |
+| [`domain-modeler`](plugins/software-engineering-skills/agents/domain-modeler/README.md) | Turns specs, plans, and design docs into the domain model and vocabulary the implementation must use |
 | [`migration-engineer`](plugins/software-engineering-skills/agents/migration-engineer/README.md) | Writes one phase of a schema change as lock-safe, reversible, tested migrations against a local database |
 | [`schema-reviewer`](plugins/software-engineering-skills/agents/schema-reviewer/README.md) | Read-only reviewer for schema changes and proposals, against the plugin's database knowledge base |
 

@@ -18,8 +18,10 @@ Source: Robert C. Martin — *Clean Code: A Handbook of Agile Software Craftsman
 - **Method names are verbs**: `postPayment`, `deletePage`, `save`. Accessors/mutators/predicates follow `get`/`set`/`is` conventions.
 - **One word per concept**: don't use `fetch`, `retrieve`, and `get` interchangeably for the same operation across the codebase.
 - **Don't pun**: using the same word to mean two different things (e.g., `add` for both collection-append and arithmetic) is a pun.
-- **Solution domain names are acceptable**: `AccountVisitor`, `JobQueue` — readers are programmers and understand CS terms.
-- **Problem domain names**: when no programming term exists, use the domain language.
+- **Speak the problem domain**: names come from the domain's own vocabulary — the words the product, its users, and its spec use. Checked on every review; see `domain-language.md`.
+- **Solution domain names only where the code's job is technical**: `JobQueue`, `RetryPolicy`, `EnrollmentRepository` are fine in infrastructure and generic utilities. In business code, a computer-science name (`processList`, `dataMap`) hides the rule the code implements.
+
+> This deliberately inverts Martin's preference, which reaches for solution-domain names first and problem-domain names only when no programming term exists. Here the domain's language comes first, and technical vocabulary is the exception that has to be justified.
 - **Add meaningful context**: `firstName`, `lastName`, `street`, `city`, `state` form an address — prefix if needed: `addrState`.
 - **Avoid gratuitous context**: don't prefix every class in a project with the project acronym.
 

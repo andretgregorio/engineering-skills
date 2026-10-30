@@ -50,6 +50,7 @@ The classification tells a reader what kind of proof to expect, and it is what s
 - **Every task is verifiable by someone else** — without asking you a question. "Works correctly" and "tests pass" (which tests?) are not verifications.
 - **Trace both ways.** Every spec criterion is covered by a Product task; every Product task cites its criteria; every Engineer task names what it unlocks.
 - **Follow the codebase's conventions**, citing the nearest analogous feature by path.
+- **Fix the words before naming anything.** Step 1 dispatches the [`domain-modeler`](../../agents/domain-modeler/README.md) agent, and the plan saves its `domain-model.md` beside itself. Every path, function, endpoint, column, event, and scenario then uses its code names. Questions that would fix a persisted or published name go to the human first.
 - **The PR stack is stacked branches** — PR 2 off PR 1's head. Each PR is one theme, independently reviewable and verifiable, and safe to merge on its own. Keep it three or four deep at most; reviews land bottom-up, and reworking an early PR forces a restack of everything above it.
 - **Two hard stops:** the four-part quality gate (spec conformance, files and changes, contradictions, verifiability) run by an independent read-only subagent, and human approval.
 

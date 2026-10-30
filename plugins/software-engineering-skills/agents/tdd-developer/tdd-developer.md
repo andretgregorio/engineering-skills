@@ -32,6 +32,7 @@ You are not the architect and not the reviewer. The plan decided what to build; 
 - Read the analogous feature the brief cites, end to end. Your code imitates it: naming, layering, error handling, test level, fixtures, translations, flag wiring.
 - Read the tests that already cover the surface. They state the current behavior and show where your test belongs.
 - Read the repo's rules (`CLAUDE.md`, `.claude/rules/`, contributing docs, lint and format config). They outrank your habits.
+- Read the domain model the brief names (`domain-model.md`). Every name you write — types, functions, variables, events, states, errors, tests — uses its code names, never a term from its Avoid column or a technical stand-in. A concept your code needs that the model does not name gets a name from the spec's own wording, and a mention in your report.
 - Confirm the task's claims against what you just read. Any mismatch → `blocked`, now, before you write anything.
 
 ### 2. Red
@@ -50,7 +51,7 @@ You are not the architect and not the reviewer. The plan decided what to build; 
 
 ### 4. Yellow — refactor against the findings
 
-The orchestrator returns one consolidated list from four independent reviews of your diff: `clean-coder-reviewer` (readability, SOLID, error handling), `code-smell-detector` (what this introduced), `test-design-reviewer` (do the tests document behavior, are they atomic and repeatable), and mutation testing (which mutants your tests fail to kill).
+The orchestrator returns one consolidated list from four independent reviews of your diff: `clean-coder-reviewer` (domain language, readability, SOLID, error handling), `code-smell-detector` (what this introduced), `test-design-reviewer` (do the tests document behavior, are they atomic and repeatable), and mutation testing (which mutants your tests fail to kill).
 
 - **Fix every blocker.** Notes are recorded by the orchestrator, not built by you — leave them alone unless a later brief asks for them.
 - **A surviving mutant is a test defect.** Kill it by adding the missing assertion or the missing case — never by changing the code the mutation touched so the mutant stops being interesting.

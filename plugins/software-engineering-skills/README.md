@@ -58,7 +58,7 @@ On a UI feature, step 6 loads the platform pattern skill and prototypes the surf
 
 *[Skill README →](skills/plan/README.md)*
 
-Produces `plan.md`: an ordered checkbox todo list where each task is classified **Engineer** or **Product**, carries 1–3 verifiable acceptance criteria, names the exact files it changes, its automated tests and its test plan — grouped into a stack of independently reviewable PRs.
+Produces `plan.md` and, beside it, `domain-model.md` — the vocabulary every name in the plan and the code uses, from the [`domain-modeler`](agents/domain-modeler/README.md) agent. The plan is an ordered checkbox todo list where each task is classified **Engineer** or **Product**, carries 1–3 verifiable acceptance criteria, names the exact files it changes, its automated tests and its test plan — grouped into a stack of independently reviewable PRs.
 
 The plan is also the implementation's memory. Every task and criterion is a checkbox, so a fresh session can pick the work up mid-flight without re-deriving it. It passes a spec-conformance quality gate before it is presented, and stops before any code is written.
 
@@ -320,6 +320,7 @@ Each agent directory carries its own README with purpose, boundaries, and input/
 | Agent | Model | Summary |
 |---|---|---|
 | [`data-modeler`](agents/data-modeler/README.md) | opus | Chooses the modeling pattern that fits a workload and designs the schema — access patterns, logical and physical model, keys and indexes traced to access patterns, lifecycle, evolution, rejected alternatives — against [`knowledge-base/database-design-patterns.md`](knowledge-base/database-design-patterns.md). Decides within the existing stack; escalates a new datastore. Read-only. |
+| [`domain-modeler`](agents/domain-modeler/README.md) | opus | Turns specs, plans, and design docs into `domain-model.md` — the ubiquitous language with one code name per term, aggregates and invariants, lifecycles, events, one-way-door names, and questions for the domain owner — against [`knowledge-base/domain-modeling.md`](knowledge-base/domain-modeling.md). Proposes words, never picks them. Also reviews code against a model. Read-only. |
 
 ### Judging and review
 
@@ -327,7 +328,7 @@ Each agent directory carries its own README with purpose, boundaries, and input/
 |---|---|---|
 | [`plan-conformance-judge`](agents/plan-conformance-judge/README.md) | opus | Read-only. Per task: `conforms`, `deviates`, or `unverifiable`, each with `path:line` evidence. Judges conformance, not craft; never proposes the fix — whether the plan or the code is wrong is the human's call. |
 | [`spike-conformance-judge`](agents/spike-conformance-judge/README.md) | opus | Read-only. Did the spike answer *the question that was asked*, and prove it — with criteria that could have failed? Nine dimensions, `meets` / `falls short` / `unverifiable`, run before the worktrees are torn down so it can re-run the probe itself. Never continues the spike, never reviews spike code for craft. |
-| [`clean-coder-reviewer`](agents/clean-coder-reviewer/README.md) | sonnet | Readability, maintainability, expressiveness — *Clean Code*, SOLID, and *The Pragmatic Programmer*, including the nuance that a bigger well-written function beats fragmented micro-functions. Review-only. |
+| [`clean-coder-reviewer`](agents/clean-coder-reviewer/README.md) | sonnet | Readability, maintainability, expressiveness — *Clean Code*, SOLID, and *The Pragmatic Programmer*, including the nuance that a bigger well-written function beats fragmented micro-functions. Every review also checks that names speak the domain's product language, not the code's mechanics. Review-only. |
 | [`code-smell-detector`](agents/code-smell-detector/README.md) | sonnet | 10 smell categories and 50+ distinct smells from the [Luzkan catalog](https://github.com/Luzkan/smells) — bloaters, change preventers, couplers, dispensables, OO abusers, obfuscators, and the rest. Detection-only. |
 | [`test-design-reviewer`](agents/test-design-reviewer/README.md) | opus | Scores tests against Dave Farley's properties of good tests, returning a Farley Score. Catches the isolation and repeatability violations behind flaky CI. Worked examples for both a high- and a low-scoring suite live in its `examples/`. |
 | [`observability-reviewer`](agents/observability-reviewer/README.md) | sonnet | Assesses fault detection, triage, and root-cause ability against [`knowledge-base/observability-engineering.md`](knowledge-base/observability-engineering.md) — metrics, logs, traces, errors, profiling, alerting — ranked Critical/Moderate/Low with file:line evidence. Assessment-only. |
@@ -350,6 +351,7 @@ Plugin-wide reference files in [`knowledge-base/`](knowledge-base/). Agents and 
 | File | Covers | Read by |
 |---|---|---|
 | [`observability-engineering.md`](knowledge-base/observability-engineering.md) | The basic questions (detect, triage, root cause, trend), the pillars, SLIs/SLOs and alerting, anti-patterns | `observability-reviewer` |
+| [`domain-modeling.md`](knowledge-base/domain-modeling.md) | The ubiquitous language, discovering the model in documents, language problems, building blocks, bounded contexts, domain terms to code names, code anti-patterns | `domain-modeler` |
 | [`database-design-patterns.md`](knowledge-base/database-design-patterns.md) | Relational, dimensional, data vault, document, key-value, wide-column, columnar, time-series, graph, and cross-cutting patterns — when each fits, design rules, anti-patterns, how to choose | `data-modeler`, `schema-reviewer`, `architect` |
 | [`database-change-management.md`](knowledge-base/database-change-management.md) | Versioned migrations, expand/contract and the roll-back test, reversibility, lock-aware DDL, data migrations, review signals | `data-modeler`, `migration-engineer`, `schema-reviewer`, `schema-migration`, `architect` |
 | [`database-test-patterns.md`](knowledge-base/database-test-patterns.md) | Whether a test needs a real database, sandboxes, teardown, test data, testing constraints and migrations, pipeline placement | `migration-engineer`, `schema-reviewer`, `schema-migration` |

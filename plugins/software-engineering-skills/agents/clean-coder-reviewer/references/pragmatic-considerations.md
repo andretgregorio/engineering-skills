@@ -100,6 +100,8 @@ If the codebase has an established pattern — even one that is not the "cleanes
 - Flag a pattern as a clean code issue only if it consistently impairs readability or maintenance.
 - Suggest refactoring the *whole* pattern (not just one instance) if the violation is widespread, and note that fixing one occurrence in isolation would be misleading.
 
+**Domain language is the exception.** Consistency governs style; it never makes a new technical name acceptable. New code uses the domain's term even when its neighbours do not — the untouched neighbours become a note recommending the rename of the whole pattern (`domain-language.md` §6).
+
 ---
 
 ## 5. The Pragmatic Programmer Principles (Hunt & Thomas)
@@ -127,8 +129,8 @@ Use this when rating findings in the review report.
 
 | Severity | Description | Examples |
 |----------|-------------|---------|
-| **Critical** | Impairs maintainability, correctness, or safety. Must be addressed before merge. | SRP violation causing tight coupling; swallowed exception hiding real errors; misleading function name; Demeter violation leaking internals; untested business-critical path |
-| **Warning** | Reduces clarity or introduces technical debt. Should be addressed soon. | Inconsistent naming; function mixing two abstraction levels; magic number in business logic; redundant or misleading comment; duplicated logic block |
+| **Critical** | Impairs maintainability, correctness, or safety. Must be addressed before merge. | SRP violation causing tight coupling; swallowed exception hiding real errors; misleading function name; a name that misstates the domain, or a technical name on a public surface of business code; Demeter violation leaking internals; untested business-critical path |
+| **Warning** | Reduces clarity or introduces technical debt. Should be addressed soon. | Inconsistent naming; an internal name in business code that describes the mechanism instead of the meaning; function mixing two abstraction levels; magic number in business logic; redundant or misleading comment; duplicated logic block |
 | **Suggestion** | A quality improvement that is not urgent. Nice to have. | Renaming for slightly better clarity; extracting a sub-function that has a natural name; adding a clarifying comment; removing a TODO that was already done |
 
 Never assign Critical to pure style preferences (spacing, bracket placement) unless the project has a linter that enforces it and the code violates that linter.
